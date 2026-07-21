@@ -1,0 +1,37 @@
+# Build artifacts
+dist-main/
+dist-renderer/
+release/
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Local secrets, credentials and signing material
+.env
+.env.*
+!.env.example
+.codex-tracker/
+auth.json
+*.credentials.json
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+
+# One-off diagnostic output
+debug-*.json
+debug-*.txt
+builder-debug.yml
+builder-effective-config.yaml

@@ -1,0 +1,69 @@
+{
+  "name": "codex-tracker",
+  "version": "2.1.0",
+  "description": "CodexTracker — Electron app for tracking your ChatGPT/Codex usage",
+  "author": "Mario Jacob",
+  "license": "MIT",
+  "main": "dist-main/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "clean": "node scripts/clean.mjs dist-main dist-renderer",
+    "compile": "npm run clean && tsc -p tsconfig.node.json && tsc -p tsconfig.json",
+    "build:renderer": "vite build",
+    "build": "npm run compile && npm run build:renderer",
+    "package": "npm run package:portable",
+    "package:portable": "node scripts/clean.mjs release && npm run build && electron-builder --win portable && node scripts/verify-package.mjs && node scripts/finalize-release.mjs",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "start": "npm run build && electron ."
+  },
+  "devDependencies": {
+    "@electron/fuses": "1.8.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "6.0.3",
+    "electron": "43.1.1",
+    "electron-builder": "^26.15.6",
+    "typescript": "^5.7.2",
+    "vite": "8.1.5"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "1.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "build": {
+    "appId": "com.codextracker.app",
+    "productName": "CodexTracker",
+    "directories": {
+      "output": "release"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@napi-rs/keyring/**/*",
+      "node_modules/@napi-rs/keyring-win32-x64-msvc/**/*"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
+    "artifactName": "${productName}-${version}.${ext}",
+    "files": [
+      "dist-main/**/*",
+      "dist-renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico"
+    }
+  }
+}
