@@ -19,6 +19,7 @@ export class ApiError extends Error {
 
 interface FetchOpts {
   accountId?: string;
+  signal?: AbortSignal;
 }
 
 async function call<T>(path: string, accessToken: string, opts: FetchOpts = {}): Promise<T> {
@@ -31,7 +32,7 @@ async function call<T>(path: string, accessToken: string, opts: FetchOpts = {}):
   };
   if (opts.accountId) headers['ChatGPT-Account-ID'] = opts.accountId;
 
-  const resp = await fetch(url, { method: 'GET', headers });
+  const resp = await fetch(url, { method: 'GET', headers, signal: opts.signal });
   if (resp.status !== 200) {
     if (resp.status === 401) {
       throw new ApiError(401, '401 Unauthorized — token invalid. Please re-import from Codex CLI.');
@@ -44,15 +45,17 @@ async function call<T>(path: string, accessToken: string, opts: FetchOpts = {}):
 export async function fetchUsage(
   accessToken: string,
   accountId?: string,
+  signal?: AbortSignal,
 ): Promise<UsageResponse> {
-  return call<UsageResponse>('/wham/usage', accessToken, { accountId });
+  return call<UsageResponse>('/wham/usage', accessToken, { accountId, signal });
 }
 
 export async function fetchResetCredits(
   accessToken: string,
   accountId?: string,
+  signal?: AbortSignal,
 ): Promise<ResetCreditsResponse> {
-  return call<ResetCreditsResponse>('/wham/rate-limit-reset-credits', accessToken, { accountId });
+  return call<ResetCreditsResponse>('/wham/rate-limit-reset-credits', accessToken, { accountId, signal });
 }
 
 /**
@@ -93,7 +96,7 @@ export async function redeemResetCredit(
  * misleading "100%" placeholder.
  */
 export function pctLeft(window: RateWindow | null | undefined): number | null {
-  if (!window || typeof window.used_percent !== 'number') return null;
+  if (!window || typeof window.used_percent !== 'number' || !Number.isFinite(window.used_percent)) return null;
   return Math.max(0, Math.min(100, 100 - window.used_percent));
 }
 

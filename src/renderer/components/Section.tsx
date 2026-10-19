@@ -26,8 +26,10 @@ interface Props {
   /** Visual state for the bar. */
   warn?: boolean;
   err?: boolean;
-  /** Position of the red "depleted-threshold" marker on the bar, in 0..100. */
-  depletedAt?: number | null;
+  currentDay?: number;
+  timeMarker?: number;
+  markerLabel?: string;
+  progressLabel?: string;
   /** Two-column meta line under the bar. */
   meta?: [MetaPair, MetaPair];
   /** Bottom area for arbitrary content (e.g. reset-credit sub-rows). */
@@ -42,7 +44,10 @@ export function Section({
   pct,
   warn,
   err,
-  depletedAt,
+  currentDay,
+  timeMarker,
+  markerLabel,
+  progressLabel,
   meta,
   children,
   noDivider,
@@ -59,10 +64,20 @@ export function Section({
 
       {fillPct != null && (
         <div
-          className="bar"
-          style={depletedAt != null ? ({ '--depleted': `${Math.max(0, Math.min(100, depletedAt))}` } as React.CSSProperties) : undefined}
+          className={`bar${currentDay ? ' weekly-bar' : ''}`}
+          role="progressbar"
+          aria-label={title}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={fillPct}
+          aria-valuetext={progressLabel}
         >
           <div className={`bar-fill ${stateClass}`} style={{ width: `${fillPct}%` }} />
+          {currentDay != null && <div className="bar-segments" aria-hidden="true">
+            {Array.from({ length: 7 }, (_, index) => <span key={index} className={index + 1 === currentDay ? 'current' : ''} />)}
+          </div>}
+          {timeMarker != null && <span className="time-marker" style={{ left: `${timeMarker}%` }}
+            title={markerLabel} aria-label={markerLabel} tabIndex={0} />}
         </div>
       )}
 

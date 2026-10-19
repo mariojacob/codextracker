@@ -1,11 +1,11 @@
 /**
  * History storage: appends one snapshot per refresh to a rolling 30-day
- * JSONL file. Used by the Sparkline cards in Phase 4.
+ * JSONL file. Records fresh API measurements for observed consumption.
  */
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { HistorySnapshot, RateWindow } from '../../shared/types.js';
+import { HistorySnapshot } from '../../shared/types.js';
 
 export type { HistorySnapshot };
 
@@ -61,14 +61,13 @@ async function pruneIfNeeded(): Promise<void> {
   }
   const lines = raw.split('\n').filter((l) => l.trim().length > 0);
   if (lines.length <= 50000) return; // Plenty of headroom, skip rewrite
-  // Keep last 80% of lines
-  const keep = Math.floor(lines.length * 0.8);
-  const trimmed = lines.slice(lines.length - keep).join('\n') + '\n';
+  // Retain by age: a fast refresh interval must not truncate the 30-day window.
+  const cutoff = Date.now() - MAX_DAYS * 86400 * 1000;
+  const recent = lines.filter((line) => {
+    try { return Date.parse(JSON.parse(line).timestamp) >= cutoff; }
+    catch { return false; }
+  });
+  if (recent.length === lines.length) return;
+  const trimmed = recent.join('\n') + '\n';
   await fs.writeFile(file, trimmed, 'utf-8');
-}
-
-/** Pull `pct_left` from a window with graceful fallback. */
-export function windowPctLeft(w: RateWindow | null | undefined): number {
-  if (!w || typeof w.used_percent !== 'number') return 100;
-  return Math.max(0, 100 - w.used_percent);
 }

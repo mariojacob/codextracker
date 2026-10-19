@@ -1,6 +1,8 @@
 import type { Settings } from '../shared/types.js';
+import { PROVIDERS, PROVIDER_IDS, type ProviderId, type ProviderSettings } from '../shared/providers.js';
+import type { StatisticsSelection } from '../shared/provider-statistics.js';
 
-const ALLOWED_CARDS = new Set(['session', 'weekly', 'credits', 'resets', 'forecast']);
+const ALLOWED_CARDS = new Set(['session', 'weekly', 'credits', 'resets']);
 
 interface SenderLike {
   id: number;
@@ -32,10 +34,12 @@ export function assertTrustedIpcSender(event: EventLike, windows: Array<WindowLi
 export function validateSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') throw new Error('Settings must be an object.');
   const input = value as Record<string, unknown>;
+  const codexEnabled = input.codex_enabled === undefined ? true : input.codex_enabled;
+  if (typeof codexEnabled !== 'boolean') throw new Error('Invalid Codex enabled flag.');
   const refresh = boundedInteger(input.refresh_seconds, 10, 3600, 'refresh_seconds');
-  const forecast = boundedInteger(input.forecast_minutes, 5, 120, 'forecast_minutes');
   const historyDays = boundedInteger(input.history_days, 1, 365, 'history_days');
   if (input.language !== 'en' && input.language !== 'de') throw new Error('Unsupported language.');
+  const providers = validateProviderSettings(input.providers ?? []);
 
   const notifications = input.notifications;
   if (!notifications || typeof notifications !== 'object') throw new Error('Invalid notifications settings.');
@@ -46,7 +50,7 @@ export function validateSettings(value: unknown): Settings {
   }
 
   const seenIds = new Set<string>();
-  const rules = notificationInput.rules.map((raw) => {
+  const rules = notificationInput.rules.filter((raw) => !(raw && typeof raw === 'object' && (raw as Record<string, unknown>).card === 'forecast')).map((raw) => {
     if (!raw || typeof raw !== 'object') throw new Error('Invalid notification rule.');
     const rule = raw as Record<string, unknown>;
     if (typeof rule.id !== 'string' || rule.id.length < 1 || rule.id.length > 128 || seenIds.has(rule.id)) {
@@ -67,12 +71,46 @@ export function validateSettings(value: unknown): Settings {
   });
 
   return {
+    codex_enabled: codexEnabled,
+    providers,
     refresh_seconds: refresh,
-    forecast_minutes: forecast,
     history_days: historyDays,
     language: input.language,
     notifications: { enabled: notificationInput.enabled, rules },
   };
+}
+
+export function validateProviderId(value: unknown): ProviderId {
+  if (typeof value !== 'string' || !PROVIDER_IDS.includes(value as ProviderId)) throw new Error('Invalid provider.');
+  return value as ProviderId;
+}
+
+export function validateStatisticsSelection(value: unknown): StatisticsSelection | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid statistics module.');
+  const raw = value as Record<string, unknown>;
+  const id = raw.id === 'codex' ? 'codex' : validateProviderId(raw.id);
+  if (raw.region !== 'global' && raw.region !== 'china') throw new Error('Invalid statistics region.');
+  if (raw.region === 'china' && (id === 'codex' || !PROVIDERS.find((provider) => provider.id === id)?.regions)) throw new Error('Invalid statistics region.');
+  return { id, region: raw.region };
+}
+
+function validateProviderSettings(value: unknown): ProviderSettings[] {
+  if (!Array.isArray(value) || value.length > PROVIDER_IDS.length) throw new Error('Invalid providers.');
+  const seen = new Set<ProviderId>();
+  return value.map((raw) => {
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid provider settings.');
+    const id = validateProviderId(raw.id);
+    if (seen.has(id)) throw new Error('Duplicate provider.');
+    seen.add(id);
+    if (typeof raw.enabled !== 'boolean') throw new Error('Invalid provider flag.');
+    const region = raw.region ?? (id === 'kimi' ? 'china' : 'global');
+    if (region !== 'global' && region !== 'china') throw new Error('Invalid provider region.');
+    if (region === 'china' && !PROVIDERS.find((provider) => provider.id === id)?.regions) throw new Error('Unsupported provider region.');
+    const team = raw.team_id ?? '';
+    if (typeof team !== 'string' || !/^[a-zA-Z0-9_-]{0,128}$/.test(team)) throw new Error('Invalid team ID.');
+    return { id, enabled: raw.enabled, region, team_id: team };
+  });
 }
 
 export function validateResetCreditId(value: unknown, knownIds: readonly string[]): string {

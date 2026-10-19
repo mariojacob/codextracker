@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { assertTrustedIpcSender, validateResetCreditId, validateSettings } = require('../dist-main/main/security.js');
 
 function validSettings() {
-  return { refresh_seconds: 60, forecast_minutes: 20, history_days: 30, language: 'en', notifications: { enabled: true, rules: [{ id: 'weekly-low', card: 'weekly', field: 'pct_left', threshold: 20, enabled: true }] } };
+  return { codex_enabled: true, providers: [], refresh_seconds: 60, history_days: 30, language: 'en', notifications: { enabled: true, rules: [{ id: 'weekly-low', card: 'weekly', field: 'pct_left', threshold: 20, enabled: true }] } };
 }
 
 test('IPC accepts only a known window main frame', () => {
@@ -25,8 +25,29 @@ test('settings validation enforces ranges and allowlists', () => {
   assert.throws(() => validateSettings(badThreshold), /threshold/);
 });
 
+test('Codex module defaults to enabled for existing settings and only accepts boolean switches', () => {
+  const legacy = validSettings(); delete legacy.codex_enabled;
+  assert.equal(validateSettings(legacy).codex_enabled, true);
+  assert.equal(validateSettings({ ...legacy, codex_enabled: false }).codex_enabled, false);
+  for (const invalid of ['false', null, 0, {}]) {
+    assert.throws(() => validateSettings({ ...legacy, codex_enabled: invalid }), /Codex/);
+  }
+});
+
 test('reset credit IDs must be bounded and present in the current snapshot', () => {
   assert.equal(validateResetCreditId('known', ['known']), 'known');
   assert.throws(() => validateResetCreditId('unknown', ['known']), /Unknown/);
   assert.throws(() => validateResetCreditId('x'.repeat(257), ['x'.repeat(257)]), /Unknown/);
+});
+
+
+test('legacy forecast settings are removed without changing other preferences', () => {
+  const legacy = validSettings();
+  legacy.forecast_minutes = 42;
+  legacy.language = 'de';
+  legacy.refresh_seconds = 120;
+  legacy.notifications.rules.push({ id: 'forecast-high', card: 'forecast', field: 'pct_left', threshold: 70, enabled: true });
+  const expected = validSettings(); expected.language = 'de'; expected.refresh_seconds = 120;
+  assert.deepEqual(validateSettings(legacy), expected);
+  assert.doesNotMatch(JSON.stringify(validateSettings(legacy)), /forecast/);
 });

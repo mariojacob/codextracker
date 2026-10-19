@@ -2,7 +2,7 @@
  * App: top-level component.
  *   - Loads settings first so the LocaleProvider can render in the right language
  *   - Single-line header (title, account email/plan, refresh + settings icons)
- *   - Four compact sections via <Cards /> (or LoginPrompt when not authed)
+ *   - Compact metric sections via Cards (or LoginPrompt when not authed)
  *   - SettingsDialog (modal) — language switcher lives here
  */
 import { useEffect, useState } from 'react';
@@ -10,8 +10,10 @@ import { LoginPrompt } from './components/LoginPrompt.js';
 import { Cards } from './components/Cards.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
 import { useCodexData } from './hooks/useCodexData.js';
+import { useProviders } from './hooks/useProviders.js';
+import { ProviderCards } from './components/ProviderCards.js';
 import { LocaleProvider, useLocale } from './i18n.js';
-import type { Settings, Language } from '../shared/types.js';
+import type { Settings } from '../shared/types.js';
 
 function statusClass(pct: number | null, snapshotError: string | null | undefined): 'ok' | 'warn' | 'err' {
   if (snapshotError) return 'err';
@@ -20,17 +22,19 @@ function statusClass(pct: number | null, snapshotError: string | null | undefine
   return 'ok';
 }
 
-function Inner() {
+function Inner({ initialSettings }: { initialSettings: Settings }) {
   const { t } = useLocale();
-  const { auth, snapshot, signIn, signOut } = useCodexData();
+  const [currentSettings, setCurrentSettings] = useState(initialSettings);
+  const codexEnabled = currentSettings.codex_enabled;
+  const { auth, snapshot, signIn, signOut } = useCodexData(codexEnabled);
+  const providers = useProviders();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [currentSettings, setCurrentSettings] = useState<Settings | null>(null);
 
   async function handleRefresh() {
     setBusy(true);
     try {
-      await signIn();
+      await Promise.allSettled([...(codexEnabled ? [signIn()] : []), providers.refresh()]);
     } finally {
       setBusy(false);
     }
@@ -38,7 +42,6 @@ function Inner() {
 
   async function handleSignOut() {
     await signOut();
-    setSettingsOpen(false);
   }
 
   async function handleQuit() {
@@ -54,36 +57,18 @@ function Inner() {
   }
 
   const isAuthed = auth?.authenticated ?? false;
-  const updatedAt = snapshot?.fetched_at;
+  const updatedAt = [codexEnabled ? snapshot?.fetched_at : null, ...providers.snapshots.map((provider) => provider.fetched_at)]
+    .filter((value): value is string => !!value).sort().at(-1);
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>{t('app.title')}</h1>
 
-        {isAuthed && (
-          <>
-            <span className="header-spacer" />
-            {(auth?.email || snapshot?.email) && (
-              <div className="header-account">
-                <span className="header-email" title={auth?.email || snapshot?.email}>
-                  {auth?.email || snapshot?.email}
-                </span>
-                {snapshot?.plan && <span className="header-plan">{snapshot.plan}</span>}
-              </div>
-            )}
-            <button
-              className="icon-btn"
-              onClick={handleRefresh}
-              disabled={busy}
-              title={t('app.refresh.tooltip')}
-            >
-              {busy ? '⟳' : '↻'}
-            </button>
-          </>
-        )}
+        <span className="header-spacer" />
 
-        {!isAuthed && <span className="header-spacer" />}
+        <button className="icon-btn" onClick={() => void handleRefresh()} disabled={busy}
+          title={t('app.refresh.tooltip')} aria-label={t('app.refresh.tooltip')}>{busy ? '⟳' : '↻'}</button>
 
         <button
           className="icon-btn"
@@ -108,9 +93,15 @@ function Inner() {
         </button>
       </header>
 
-      {isAuthed ? (
-        <main className="app-main">
-          {snapshot?.session_window_available && (
+      <main className="app-main">
+        <ProviderCards snapshots={providers.snapshots} error={providers.error} codex={codexEnabled ?
+          <section className="provider-card provider-codex">
+            <div className="provider-card-head"><h3>ChatGPT / Codex</h3>
+              {(snapshot?.plan || auth?.plan) && <span className="header-plan">{snapshot?.plan || auth?.plan}</span>}
+            </div>
+            {isAuthed && (auth?.email || snapshot?.email) && <p className="provider-note provider-account">{auth?.email || snapshot?.email}</p>}
+            {isAuthed ? <>
+            {snapshot?.session_window_available && (
             <span
               className={`status-pill ${statusClass(snapshot.session_pct_left, snapshot.error)}`}
             >
@@ -119,27 +110,33 @@ function Inner() {
                 : t('status.ok')}
             </span>
           )}
-          <Cards />
-        </main>
-      ) : (
-        <main className="app-main">
-          <LoginPrompt onImported={() => void signIn()} />
-        </main>
-      )}
+          <Cards snapshot={snapshot} />
+            <div className="provider-card-footer"><span>{snapshot?.fetched_at ? `${t('app.footer.updated')} ${formatTime(snapshot.fetched_at)}` : ''}</span>
+              <button className="btn-tiny" onClick={() => void handleOpenStats()}>{t('app.stats.tooltip')}</button></div>
+            </> : <LoginPrompt onImported={() => void signIn()} />}
+          </section> : null} />
+        {!codexEnabled && !providers.snapshots.length && <div className="providers-empty">
+          <p className="provider-note">{t('providers.empty')}</p>
+          <button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}>{t('settings.title')}</button>
+        </div>}
+      </main>
 
       <footer className="app-footer">
         <span>
-          {isAuthed && updatedAt
+          {updatedAt
             ? `${t('app.footer.updated')} ${formatTime(updatedAt)}`
-            : t('app.footer.never')}
+            : t('providers.noReadings')}
         </span>
         <span>{t('app.version')}</span>
       </footer>
 
       <SettingsDialog
+        providers={providers}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSignOut={handleSignOut}
+        onCodexRefresh={signIn}
+        codexAuthenticated={isAuthed}
         onQuit={handleQuit}
         currentSettings={currentSettings}
         onSettingsChanged={handleSettingsChanged}
@@ -149,28 +146,28 @@ function Inner() {
 }
 
 export default function App() {
-  const [initialLocale, setInitialLocale] = useState<Language | null>(null);
+  const [initialSettings, setInitialSettings] = useState<Settings | null>(null);
 
   // Pull the persisted locale once, before first render of Inner.
   // Until then we render nothing (avoid a flash of English UI for German users).
   useEffect(() => {
     let cancelled = false;
     void window.codexAPI.getSettings().then((s) => {
-      if (!cancelled) setInitialLocale(s.language ?? 'en');
+      if (!cancelled) setInitialSettings(s);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (initialLocale == null) {
+  if (initialSettings == null) {
     // Minimal shell so the first paint doesn't blink from no-root → full UI.
     return <div className="app" />;
   }
 
   return (
-    <LocaleProvider initial={initialLocale}>
-      <Inner />
+    <LocaleProvider initial={initialSettings.language}>
+      <Inner initialSettings={initialSettings} />
     </LocaleProvider>
   );
 }

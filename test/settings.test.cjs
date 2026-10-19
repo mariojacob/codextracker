@@ -1,0 +1,41 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { loadSettings } = require('../dist-main/main/settings.js');
+
+test('loading legacy settings persists migration and preserves unrelated rules and preferences', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codextracker-settings-test-'));
+  const dataDirectory = path.join(directory, '.codex-tracker');
+  const file = path.join(dataDirectory, 'settings.json');
+  const originalHome = os.homedir;
+  const legacy = {
+    refresh_seconds: 120, forecast_minutes: 42, history_days: 30, language: 'de',
+    notifications: { enabled: false, rules: [
+      { id: 'custom', card: 'weekly', field: 'pct_left', threshold: 32, enabled: true },
+      { id: 'forecast-high', card: 'forecast', field: 'pct_left', threshold: 70, enabled: true },
+    ] },
+  };
+  try {
+    await fs.mkdir(dataDirectory);
+    await fs.writeFile(file, JSON.stringify(legacy));
+    os.homedir = () => directory;
+    const loaded = await loadSettings();
+    assert.equal(loaded.language, 'de');
+    assert.equal(loaded.codex_enabled, true, 'existing installations keep Codex enabled');
+    assert.equal(loaded.refresh_seconds, 120);
+    assert.equal(loaded.notifications.enabled, false);
+    assert.deepEqual(loaded.notifications.rules, [legacy.notifications.rules[0]]);
+    assert.doesNotMatch(await fs.readFile(file, 'utf8'), /forecast/);
+    assert.deepEqual(await loadSettings(), loaded, 'migration remains stable on the next load');
+    await fs.writeFile(file, JSON.stringify({ ...loaded, codex_enabled: false }));
+    assert.equal((await loadSettings()).codex_enabled, false, 'disabled module persists across restart');
+  } finally {
+    os.homedir = originalHome;
+    await fs.unlink(file).catch(() => {});
+    await fs.unlink(file + '.tmp').catch(() => {});
+    await fs.rmdir(dataDirectory);
+    await fs.rmdir(directory);
+  }
+});

@@ -1,9 +1,10 @@
 // Shared types used by both main and renderer processes.
+import type { ProviderSettings } from './providers.js';
 
 /** Notification rule. Mirrors settings.ts:NotificationRule (kept in sync). */
 export interface NotificationRule {
   id: string;
-  card: 'session' | 'weekly' | 'credits' | 'resets' | 'forecast';
+  card: 'session' | 'weekly' | 'credits' | 'resets';
   field: 'pct_left';
   threshold: number;
   enabled: boolean;
@@ -13,13 +14,10 @@ export interface NotificationRule {
 export type Language = 'en' | 'de';
 
 export interface Settings {
+  /** Existing installations keep Codex enabled until explicitly disabled. */
+  codex_enabled: boolean;
+  providers: ProviderSettings[];
   refresh_seconds: number;
-  /**
-   * Refresh interval for the willcodexquotareset.com forecast feed.
-   * Independent of `refresh_seconds` (which drives the Codex API).
-   * Server refreshes every ~30 min, so values below 10 are clamped.
-   */
-  forecast_minutes: number;
   notifications: {
     enabled: boolean;
     rules: NotificationRule[];
@@ -29,31 +27,17 @@ export interface Settings {
   language: Language;
 }
 
-/** Compact forecast snapshot pulled from willcodexquotareset.com. */
-export interface ForecastSnapshot {
-  /** ISO timestamp of when the server last refreshed its sources. */
-  fetched_at: string;
-  /** Likelihood of a Codex quota reset in the next 48h, 0..100. */
-  score: number;
-  /** Server detected an explicit upcoming reset announcement. */
-  reset_announced: boolean;
-  /** When the most recent reset was observed. null if unknown. */
-  latest_reset_at: string | null;
-  /** Days elapsed since the most recent reset. */
-  days_since_reset: number;
-  /** Up to 3 most informative recent score changes (sorted by |delta|). */
-  recent_changes: Array<{
-    at: string;
-    delta: number;
-    label: string;
-  }>;
-}
-
 /** One history snapshot. Mirrors history.ts:HistorySnapshot. */
 export interface HistorySnapshot {
+  version?: 2;
+  session_reset_at?: number | null;
+  weekly_reset_at?: number | null;
+  session_window_seconds?: number | null;
+  weekly_window_seconds?: number | null;
+  refresh_seconds?: number;
   timestamp: string;
-  session_pct_left: number;
-  weekly_pct_left: number;
+  session_pct_left: number | null;
+  weekly_pct_left: number | null;
   credits_balance: number | null;
   reset_credits_available: number;
 }
@@ -84,50 +68,41 @@ export interface CachedSnapshot {
    * valid primary_window comes back.
    */
   session_window_available: boolean;
-  /** Latest forecast snapshot. null until first successful fetch. */
-  forecast: ForecastSnapshot | null;
-  /** Last forecast fetch error message. Cleared on next success. */
-  forecast_error: string | null;
+  weekly_window_seconds: number | null;
 }
 
-/** One day in the statistics window (YYYY-MM-DD in local time). */
+/** Observed changes during a reset-anchored budget day. */
 export interface DailyBucket {
-  date: string;
-  weekly_pct_used_min: number | null;
-  weekly_pct_used_avg: number | null;
-  session_pct_used_min: number | null;
-  session_pct_used_avg: number | null;
-  credits_spent: number;
-  snapshots: number;
+  start_at: number;
+  end_at: number;
+  weekly_consumed: number | null;
+  credits_spent: number | null;
+  credits_gained: number | null;
+  incomplete: boolean;
+  credits_incomplete: boolean;
+  estimated: boolean;
+  observed_ms: number;
 }
 
-/** Aggregated usage grouped by day of week (0 = Sunday .. 6 = Saturday). */
-export interface WeekdayBucket {
-  weekday: number;
-  sessions: number;
+export interface UsageTotal {
+  value: number | null;
+  incomplete: boolean;
 }
 
-/** Overall summary numbers for the statistics window. */
 export interface StatisticsSummary {
-  days_covered: number;
-  range_start: string;
-  range_end: string;
-  avg_weekly_pct_left: number | null;
-  peak_weekly_pct_used: number | null;
-  avg_session_pct_left: number | null;
-  peak_session_pct_used: number | null;
-  credits_spent: number;
-  credits_gained: number;
-  sessions_opened: number;
-  most_active_weekday: number | null;
-  most_active_weekday_sessions: number;
+  current_day: UsageTotal;
+  previous_day: UsageTotal;
+  last_7_days: UsageTotal;
+  last_30_days: UsageTotal;
+  credits_spent: UsageTotal;
+  credits_gained: UsageTotal;
 }
 
-/** Full statistics payload returned by main via STATS_GET IPC. */
 export interface Statistics {
   summary: StatisticsSummary;
   daily: DailyBucket[];
-  weekday: WeekdayBucket[];
+  anchor_available: boolean;
+  has_legacy_history: boolean;
   computed_at: string;
 }
 
@@ -214,4 +189,11 @@ export const IPC = {
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_QUIT: 'window:quit',
   APP_PING: 'app:ping',
+  PROVIDERS_GET: 'providers:get',
+  PROVIDERS_REFRESH: 'providers:refresh',
+  PROVIDERS_CONNECTIONS: 'providers:connections',
+  PROVIDER_SAVE_CREDENTIAL: 'providers:save-credential',
+  PROVIDER_REMOVE_CREDENTIAL: 'providers:remove-credential',
+  PROVIDER_IMPORT_CREDENTIAL: 'providers:import-credential',
+  PROVIDER_OPEN_DASHBOARD: 'providers:open-dashboard',
 } as const;

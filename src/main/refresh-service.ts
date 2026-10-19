@@ -9,7 +9,6 @@
  */
 import { EventEmitter } from 'node:events';
 import { fetchResetCredits, fetchUsage, fmtTimedelta, parseResetAt, pctLeft, redeemResetCredit } from './codex/api.js';
-import { fetchForecast } from './codex/forecast.js';
 import { appendSnapshot, HistorySnapshot } from './codex/history.js';
 import { notifDeduper, showNotification } from './notifications.js';
 import { loadSettings, Settings } from './settings.js';
@@ -37,20 +36,8 @@ const EMPTY: CachedSnapshot = {
   // Start as false so the UI doesn't flash the Session section before the
   // first fetch lands. Flips true once we see a usable primary_window.
   session_window_available: false,
-  // Forecast refresh runs independently from the Codex API and works
-  // without auth, but it starts empty until the first fetch lands.
-  forecast: null,
-  forecast_error: null,
+  weekly_window_seconds: null,
 };
-
-/** Minimum forecast polling interval. Server refreshes its sources
- * every ~30 minutes, so polling faster than this just wastes requests. */
-const FORECAST_MIN_MINUTES = 5;
-/** Hard upper bound to keep settings mistakes from paralyzing the loop. */
-const FORECAST_MAX_MINUTES = 120;
-/** Extra margin we add on top of the server-supplied `nextRefreshAt` to
- * avoid hitting the API one second too early because of clock skew. */
-const FORECAST_NEXT_REFRESH_SAFETY_MS = 60_000;
 
 /** 5h rolling limit = 18000 seconds. The session limit OpenAI exposes
  *  in /wham/usage rate_limit.primary_window for Plus/Pro/Business plans. */
@@ -73,7 +60,7 @@ const SESSION_MISSING_THRESHOLD = 3;
 function classifyWindow(
   w: RateWindow | null | undefined,
 ): 'session' | 'weekly' | 'unknown' {
-  if (!w || typeof w.used_percent !== 'number') return 'unknown';
+  if (!w || typeof w.used_percent !== 'number' || !Number.isFinite(w.used_percent)) return 'unknown';
 
   const win = w.limit_window_seconds;
   if (win === SESSION_WINDOW_SECONDS) return 'session';
@@ -94,83 +81,83 @@ function classifyWindow(
   return 'unknown';
 }
 
-/** True iff the API gave us a primary_window that looks like the 5h
- * session limit. Kept for the existing session_window_available flag
- * which only needs to know about the session lane specifically. */
-function isSessionWindowUsable(primary: RateWindow | null | undefined): boolean {
-  return classifyWindow(primary) === 'session';
-}
-
-function clampNumber(n: number, min: number, max: number): number {
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, n));
-}
-
 export class RefreshService extends EventEmitter {
   private timer: NodeJS.Timeout | null = null;
   private inFlight = false;
+  private activeRequest: AbortController | null = null;
+  private revision = 0;
+  private stopped = false;
   private snapshot: CachedSnapshot = { ...EMPTY };
   private settings: Settings | null = null;
-  private lastSnapshotValues: Map<string, number> = new Map();
   /** Tracks consecutive ticks where the 5h window was unusable. */
   private sessionMissingStreak = 0;
-  /** Independent timer for the willcodexquotareset.com forecast poll. */
-  private forecastTimer: NodeJS.Timeout | null = null;
-  private forecastInFlight = false;
-  /** Server-supplied next-safe-fetch timestamp (ms epoch). */
-  private forecastNextAllowedAt = 0;
-
   constructor(private readonly tokens: TokenManager) {
     super();
   }
 
   async start(): Promise<void> {
-    this.settings = await loadSettings();
+    this.stopped = false;
+    const settings = await loadSettings();
+    if (!this.settings) this.settings = settings;
     // Initial fetch (if authenticated)
-    if (this.tokens.isAuthenticated()) {
+    if (this.isEnabled() && this.tokens.isAuthenticated()) {
       void this.refreshNow();
     }
     this.scheduleNext();
-    // Forecast has no auth requirement, so we always start its timer.
-    void this.refreshForecast();
-    this.scheduleForecast();
   }
 
   stop(): void {
+    this.stopped = true;
+    this.cancelRequest();
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (this.forecastTimer) {
-      clearTimeout(this.forecastTimer);
-      this.forecastTimer = null;
-    }
   }
 
   async refreshNow(): Promise<CachedSnapshot> {
+    if (!this.settings) {
+      const settings = await loadSettings();
+      if (!this.settings) this.settings = settings;
+    }
+    if (!this.isEnabled() || this.stopped) return this.snapshot;
     if (this.inFlight) return this.snapshot;
     this.inFlight = true;
+    const controller = new AbortController();
+    this.activeRequest = controller;
+    const revision = this.revision;
+    const current = () => revision === this.revision && this.isEnabled() && !this.stopped;
     try {
       const accessToken = await this.tokens.getAccessToken();
+      if (!current()) return this.snapshot;
       const accountId = (await this.tokens.getAccountId()) ?? undefined;
+      if (!current()) return this.snapshot;
       const [usage, resets] = await Promise.all([
-        fetchUsage(accessToken, accountId),
-        fetchResetCredits(accessToken, accountId),
+        fetchUsage(accessToken, accountId, controller.signal),
+        fetchResetCredits(accessToken, accountId, controller.signal),
       ]);
+      if (!current()) return this.snapshot;
       const snap = this.buildSnapshot(usage, resets);
       this.snapshot = snap;
       // Save email if newly known
       if (snap.email) await this.tokens.updateEmail(snap.email);
+      if (!current()) return this.snapshot;
       // Append to history
-      await this.recordHistory(snap);
+      await this.recordHistory(snap, usage);
+      if (!current()) return this.snapshot;
       // Check notification rules
       this.checkNotifications(snap);
       this.emit('updated', snap);
     } catch (err) {
-      this.snapshot = { ...this.snapshot, error: (err as Error).message };
-      this.emit('updated', this.snapshot);
+      if (current()) {
+        this.snapshot = { ...this.snapshot, error: (err as Error).message };
+        this.emit('updated', this.snapshot);
+      }
     } finally {
-      this.inFlight = false;
+      if (this.activeRequest === controller) {
+        this.inFlight = false;
+        this.activeRequest = null;
+      }
     }
     return this.snapshot;
   }
@@ -180,13 +167,35 @@ export class RefreshService extends EventEmitter {
   }
 
   updateSettings(s: Settings): void {
+    const wasEnabled = this.isEnabled();
     this.settings = s;
+    if (wasEnabled !== s.codex_enabled) this.clearSnapshot();
     this.scheduleNext();
-    this.scheduleForecast();
+    if (s.codex_enabled && !wasEnabled && this.tokens.isAuthenticated()) void this.refreshNow();
+  }
+
+  isEnabled(): boolean {
+    return this.settings?.codex_enabled ?? false;
+  }
+
+  /** Invalidate late results without removing the saved login or history. */
+  clearSnapshot(): void {
+    this.cancelRequest();
+    this.snapshot = { ...EMPTY };
+    this.sessionMissingStreak = 0;
+    this.emit('updated', this.snapshot);
+  }
+
+  private cancelRequest(): void {
+    this.revision++;
+    this.activeRequest?.abort();
+    this.activeRequest = null;
+    this.inFlight = false;
   }
 
   /** Trigger a redeem on a specific reset-credit. Returns success/failure. */
   async redeemCredit(creditId: string): Promise<{ ok: boolean; message: string }> {
+    if (!this.isEnabled()) return { ok: false, message: 'Codex monitoring is disabled.' };
     try {
       if (
         typeof creditId !== 'string' ||
@@ -215,6 +224,7 @@ export class RefreshService extends EventEmitter {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    if (!this.isEnabled() || this.stopped) return;
     const secs = this.settings?.refresh_seconds ?? 60;
     this.timer = setTimeout(() => {
       void this.tick();
@@ -226,71 +236,6 @@ export class RefreshService extends EventEmitter {
       await this.refreshNow();
     }
     this.scheduleNext();
-  }
-
-  /** Pulls the latest forecast from willcodexquotareset.com and merges it
-   * into the current snapshot. Forecast is auth-free so this runs even
-   * when the user isn't signed in. */
-  private async refreshForecast(): Promise<void> {
-    if (this.forecastInFlight) return;
-    this.forecastInFlight = true;
-    try {
-      const { snapshot, nextRefreshAt } = await fetchForecast();
-      this.snapshot = {
-        ...this.snapshot,
-        forecast: snapshot,
-        forecast_error: null,
-      };
-      if (nextRefreshAt) {
-        const parsed = Date.parse(nextRefreshAt);
-        if (!Number.isNaN(parsed)) {
-          this.forecastNextAllowedAt = parsed + FORECAST_NEXT_REFRESH_SAFETY_MS;
-        }
-      }
-      this.checkNotifications(this.snapshot);
-      this.emit('updated', this.snapshot);
-    } catch (err) {
-      this.snapshot = {
-        ...this.snapshot,
-        forecast_error: (err as Error).message,
-      };
-      this.emit('updated', this.snapshot);
-    } finally {
-      this.forecastInFlight = false;
-    }
-  }
-
-  /** Compute the delay until the next forecast fetch, respecting both the
-   * user-configured interval and the server-supplied `nextRefreshAt`. */
-  private nextForecastDelayMs(): number {
-    const minutes = clampNumber(
-      this.settings?.forecast_minutes ?? 20,
-      FORECAST_MIN_MINUTES,
-      FORECAST_MAX_MINUTES,
-    );
-    const userDelay = minutes * 60_000;
-    const now = Date.now();
-    const serverDelay = Math.max(0, this.forecastNextAllowedAt - now);
-    return Math.max(userDelay, serverDelay);
-  }
-
-  private scheduleForecast(): void {
-    if (this.forecastTimer) {
-      clearTimeout(this.forecastTimer);
-      this.forecastTimer = null;
-    }
-    const delay = this.nextForecastDelayMs();
-    this.forecastTimer = setTimeout(() => {
-      void this.refreshForecast().finally(() => this.scheduleForecast());
-    }, delay);
-  }
-
-  /** Manual hook so other code (e.g. tray "Refresh now") can force a
-   * forecast fetch and reschedule the timer. */
-  async refreshForecastNow(): Promise<void> {
-    this.forecastNextAllowedAt = 0;
-    await this.refreshForecast();
-    this.scheduleForecast();
   }
 
   private buildSnapshot(usage: UsageResponse, resets: ResetCreditsResponse): CachedSnapshot {
@@ -355,21 +300,24 @@ export class RefreshService extends EventEmitter {
       weekly_reset_at: parseResetAt(weeklyWin?.reset_at),
       reset_credit_details: resets.credits ?? [],
       session_window_available,
-      // Forecast lives on its own refresh loop — preserve whatever was
-      // last fetched (or null) when the Codex snapshot rebuilds.
-      forecast: this.snapshot.forecast,
-      forecast_error: this.snapshot.forecast_error,
+      weekly_window_seconds: weeklyWin ? (weeklyWin.limit_window_seconds ?? WEEKLY_WINDOW_SECONDS) : null,
     };
   }
 
-  private async recordHistory(snap: CachedSnapshot): Promise<void> {
-    // History drives the sparkline. If both windows are missing this tick,
-    // writing a (null, null) row would break the chart — skip the entry.
-    if (snap.session_pct_left == null && snap.weekly_pct_left == null) return;
+  private async recordHistory(snap: CachedSnapshot, usage: UsageResponse): Promise<void> {
+    const windows = [usage.rate_limit?.primary_window, usage.rate_limit?.secondary_window];
+    const session = windows.find((window) => classifyWindow(window) === 'session');
+    const weekly = windows.find((window) => classifyWindow(window) === 'weekly');
     const entry: HistorySnapshot = {
+      version: 2,
       timestamp: snap.fetched_at,
-      session_pct_left: snap.session_pct_left ?? 0,
-      weekly_pct_left: snap.weekly_pct_left ?? 0,
+      session_pct_left: pctLeft(session),
+      weekly_pct_left: pctLeft(weekly),
+      session_reset_at: parseResetAt(session?.reset_at),
+      weekly_reset_at: parseResetAt(weekly?.reset_at),
+      session_window_seconds: session ? (session.limit_window_seconds ?? SESSION_WINDOW_SECONDS) : null,
+      weekly_window_seconds: weekly ? (weekly.limit_window_seconds ?? WEEKLY_WINDOW_SECONDS) : null,
+      refresh_seconds: this.settings?.refresh_seconds ?? 60,
       credits_balance: snap.credits_balance,
       reset_credits_available: snap.reset_credits_available,
     };
@@ -391,7 +339,6 @@ export class RefreshService extends EventEmitter {
       weekly: snap.weekly_pct_left ?? 100,
       credits: snap.credits_balance ?? 0,
       resets: snap.reset_credits_available,
-      forecast: snap.forecast?.score ?? null,
     };
 
     for (const rule of this.settings.notifications.rules) {
@@ -403,11 +350,7 @@ export class RefreshService extends EventEmitter {
       if (value == null) continue;
       const key = `${rule.id}:${rule.threshold}`;
 
-      // Forecast is inverted: high score = high chance of a reset = user
-      // wants the heads-up. Everything else stays "low = bad".
-      const triggered = rule.card === 'forecast'
-        ? value >= rule.threshold
-        : value < rule.threshold;
+      const triggered = value < rule.threshold;
 
       if (triggered) {
         if (notifDeduper.shouldSend(key)) {
@@ -421,7 +364,6 @@ export class RefreshService extends EventEmitter {
         // Value moved away from the trigger zone; allow re-fire next time
         notifDeduper.reset(key);
       }
-      this.lastSnapshotValues.set(rule.id, value);
     }
   }
 
@@ -432,9 +374,7 @@ export class RefreshService extends EventEmitter {
     if (rule.card === 'resets') {
       return `${value} reset credit(s) available.`;
     }
-    if (rule.card === 'forecast') {
-      return `Reset forecast: ${value.toFixed(0)}% in next 48h (threshold ${rule.threshold}%).`;
-    }
+
     return `${rule.card} at ${value.toFixed(0)}% (threshold ${rule.threshold}%).`;
   }
 }

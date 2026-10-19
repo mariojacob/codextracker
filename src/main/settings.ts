@@ -11,8 +11,9 @@ import { validateSettings } from './security.js';
 export type { Settings, NotificationRule };
 
 const DEFAULT_SETTINGS: Settings = {
+  codex_enabled: true,
+  providers: [],
   refresh_seconds: 60,
-  forecast_minutes: 20,
   notifications: {
     enabled: true,
     rules: [
@@ -23,13 +24,6 @@ const DEFAULT_SETTINGS: Settings = {
         card: 'resets',
         field: 'pct_left',
         threshold: 100,
-        enabled: false,
-      },
-      {
-        id: 'forecast-high',
-        card: 'forecast',
-        field: 'pct_left',
-        threshold: 70,
         enabled: false,
       },
     ],
@@ -46,7 +40,7 @@ export async function loadSettings(): Promise<Settings> {
   try {
     const raw = await fs.readFile(settingsPath(), 'utf-8');
     const data = JSON.parse(raw) as Partial<Settings>;
-    return validateSettings({
+    const validated = validateSettings({
       ...DEFAULT_SETTINGS,
       ...data,
       notifications: {
@@ -55,6 +49,11 @@ export async function loadSettings(): Promise<Settings> {
         rules: data.notifications?.rules ?? DEFAULT_SETTINGS.notifications.rules,
       },
     });
+    if ('forecast_minutes' in data || data.notifications?.rules?.some((rule) => (rule.card as string) === 'forecast')) {
+      try { await saveSettings(validated); }
+      catch { console.warn('Could not persist the settings migration.'); }
+    }
+    return validated;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

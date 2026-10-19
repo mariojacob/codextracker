@@ -6,11 +6,16 @@
 import { useEffect, useState } from 'react';
 import type { Settings, NotificationRule, Language } from '../../shared/types.js';
 import { useLocale } from '../i18n.js';
+import { ProviderSettings } from './ProviderSettings.js';
+import type { ProviderControls } from '../hooks/useProviders.js';
 
 interface Props {
+  providers: ProviderControls;
   open: boolean;
   onClose: () => void;
-  onSignOut: () => void;
+  onSignOut: () => Promise<void>;
+  onCodexRefresh: () => Promise<void>;
+  codexAuthenticated: boolean;
   onQuit: () => void;
   /** Provided by parent so we can echo current settings back up after a change. */
   currentSettings?: Settings | null;
@@ -18,9 +23,12 @@ interface Props {
 }
 
 export function SettingsDialog({
+  providers,
   open,
   onClose,
   onSignOut,
+  onCodexRefresh,
+  codexAuthenticated,
   onQuit,
   currentSettings,
   onSettingsChanged,
@@ -28,6 +36,10 @@ export function SettingsDialog({
   const { t, locale, setLocale } = useLocale();
   const [settings, setSettings] = useState<Settings | null>(currentSettings ?? null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const reloadConnections = providers.reloadConnections;
+
+  useEffect(() => { if (open) void reloadConnections(); }, [open, reloadConnections]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,10 +55,14 @@ export function SettingsDialog({
 
   async function save(newSettings: Settings) {
     setSaving(true);
+    setSaveError(false);
     try {
       await window.codexAPI.setSettings(newSettings);
       setSettings(newSettings);
       onSettingsChanged?.(newSettings);
+    } catch (error) {
+      setSaveError(true);
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -62,7 +78,7 @@ export function SettingsDialog({
       },
     };
     setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
   }
 
   function addRule() {
@@ -79,7 +95,7 @@ export function SettingsDialog({
       },
     };
     setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
   }
 
   function removeRule(idx: number) {
@@ -92,21 +108,14 @@ export function SettingsDialog({
       },
     };
     setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
   }
 
   function setRefreshSeconds(n: number) {
     if (!settings) return;
     const next = { ...settings, refresh_seconds: Math.max(10, Math.min(3600, n)) };
     setSettings(next);
-    void save(next);
-  }
-
-  function setForecastMinutes(n: number) {
-    if (!settings) return;
-    const next = { ...settings, forecast_minutes: Math.max(5, Math.min(120, n)) };
-    setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
   }
 
   function setNotifEnabled(enabled: boolean) {
@@ -116,14 +125,14 @@ export function SettingsDialog({
       notifications: { ...settings.notifications, enabled },
     };
     setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
   }
 
   function setLanguage(lang: Language) {
     if (!settings) return;
     const next = { ...settings, language: lang };
     setSettings(next);
-    void save(next);
+    void save(next).catch(() => {});
     void setLocale(lang); // optimistic: re-render immediately, disk-write runs in parallel
   }
 
@@ -131,6 +140,10 @@ export function SettingsDialog({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{t('settings.title')}</h3>
+        {saveError && <p className="provider-error" role="alert">{t('providers.error.settings')}</p>}
+
+        <ProviderSettings settings={settings} save={save} controls={providers}
+          codexAuthenticated={codexAuthenticated} onCodexRefresh={onCodexRefresh} onSignOut={onSignOut} />
 
         <div className="modal-section">
           <h4>{t('settings.section.refresh')}</h4>
@@ -143,21 +156,6 @@ export function SettingsDialog({
               step={10}
               value={settings.refresh_seconds}
               onChange={(e) => setRefreshSeconds(parseInt(e.target.value, 10) || 60)}
-            />
-          </div>
-        </div>
-
-        <div className="modal-section">
-          <h4>{t('settings.section.forecast')}</h4>
-          <div className="modal-row">
-            <label>{t('settings.forecastInterval')}</label>
-            <input
-              type="number"
-              min={5}
-              max={120}
-              step={5}
-              value={settings.forecast_minutes}
-              onChange={(e) => setForecastMinutes(parseInt(e.target.value, 10) || 20)}
             />
           </div>
         </div>
@@ -179,6 +177,7 @@ export function SettingsDialog({
 
         <div className="modal-section">
           <h4>{t('settings.section.notifications')}</h4>
+          <p className="provider-note">{t('providers.codexNotifications')}</p>
           <div className="modal-row">
             <label>{t('settings.notificationsEnabled')}</label>
             <input
@@ -204,7 +203,6 @@ export function SettingsDialog({
                 <option value="weekly">{t('settings.ruleCard.weekly')}</option>
                 <option value="credits">{t('settings.ruleCard.credits')}</option>
                 <option value="resets">{t('settings.ruleCard.resets')}</option>
-                <option value="forecast">{t('settings.ruleCard.forecast')}</option>
               </select>
               <span style={{ color: 'var(--text-muted)' }}>&lt;</span>
               <input
@@ -227,9 +225,6 @@ export function SettingsDialog({
         </div>
 
         <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onSignOut} style={{ width: 'auto' }}>
-            {t('settings.signOut')}
-          </button>
           <button className="btn btn-secondary" onClick={onClose} style={{ width: 'auto' }}>
             {t('settings.close')}
           </button>

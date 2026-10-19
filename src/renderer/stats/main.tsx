@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { Statistics } from './Statistics.js';
+import { Statistics } from './ModuleStatistics.js';
 import '../styles/global.css';
 import './styles/stats.css';
 

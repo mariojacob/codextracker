@@ -9,8 +9,9 @@ import type {
   CachedSnapshot as _CS,
   HistorySnapshot,
   Settings,
-  Statistics,
 } from '../shared/types.js';
+import type { ProviderConnection, ProviderError, ProviderId, ProviderSnapshot } from '../shared/providers.js';
+import type { ModuleStatisticsReport, StatisticsSelection } from '../shared/provider-statistics.js';
 
 // Sandboxed Electron preload scripts may only require a small set of built-in
 // modules. In particular, they cannot load our compiled ../shared/types.js at
@@ -29,6 +30,13 @@ const IPC = {
   WINDOW_OPEN_STATS: 'window:open-stats',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_QUIT: 'window:quit',
+  PROVIDERS_GET: 'providers:get',
+  PROVIDERS_REFRESH: 'providers:refresh',
+  PROVIDERS_CONNECTIONS: 'providers:connections',
+  PROVIDER_SAVE_CREDENTIAL: 'providers:save-credential',
+  PROVIDER_REMOVE_CREDENTIAL: 'providers:remove-credential',
+  PROVIDER_IMPORT_CREDENTIAL: 'providers:import-credential',
+  PROVIDER_OPEN_DASHBOARD: 'providers:open-dashboard',
 } as const;
 
 // Re-export type used by the renderer.
@@ -55,7 +63,24 @@ const api = {
     ipcRenderer.invoke(IPC.SETTINGS_SET, s),
 
   // ---- Statistics ----
-  getStats: (): Promise<Statistics> => ipcRenderer.invoke(IPC.STATS_GET),
+  getStats: (selection?: StatisticsSelection): Promise<ModuleStatisticsReport> => ipcRenderer.invoke(IPC.STATS_GET, selection),
+  onStatsUpdate: (cb: () => void): (() => void) => {
+    const listener = () => cb(); ipcRenderer.on('stats:updated', listener);
+    return () => ipcRenderer.removeListener('stats:updated', listener);
+  },
+
+  getProviders: (): Promise<ProviderSnapshot[]> => ipcRenderer.invoke(IPC.PROVIDERS_GET),
+  refreshProviders: (id?: ProviderId): Promise<ProviderSnapshot[]> => ipcRenderer.invoke(IPC.PROVIDERS_REFRESH, id),
+  getProviderConnections: (): Promise<ProviderConnection[]> => ipcRenderer.invoke(IPC.PROVIDERS_CONNECTIONS),
+  saveProviderCredential: (id: ProviderId, secret: string): Promise<{ ok: boolean; error: ProviderError | null }> => ipcRenderer.invoke(IPC.PROVIDER_SAVE_CREDENTIAL, id, secret),
+  removeProviderCredential: (id: ProviderId): Promise<{ ok: boolean; error: ProviderError | null }> => ipcRenderer.invoke(IPC.PROVIDER_REMOVE_CREDENTIAL, id),
+  importProviderCredential: (id: ProviderId): Promise<{ ok: boolean; error: ProviderError | null }> => ipcRenderer.invoke(IPC.PROVIDER_IMPORT_CREDENTIAL, id),
+  openProviderDashboard: (id: ProviderId): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.PROVIDER_OPEN_DASHBOARD, id),
+  onProvidersUpdate: (cb: (snapshots: ProviderSnapshot[]) => void): (() => void) => {
+    const listener = (_e: unknown, snapshots: ProviderSnapshot[]) => cb(snapshots);
+    ipcRenderer.on('providers:updated', listener);
+    return () => ipcRenderer.removeListener('providers:updated', listener);
+  },
 
   // ---- Window controls ----
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke(IPC.WINDOW_MINIMIZE),

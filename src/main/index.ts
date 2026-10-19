@@ -9,19 +9,23 @@
  *  - Drive the auto-refresh loop via RefreshService
  *  - Save and restore the user's last selected plan/email from /wham/usage
  */
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import * as path from 'node:path';
 import { readCodexAuth } from './codex/auth-reader.js';
 import { TokenManager } from './codex/tokens.js';
 import { readHistory } from './codex/history.js';
-import { computeStatistics } from './codex/stats.js';
+import { statisticsReport } from './providers/statistics-report.js';
+import { ProviderHistoryStore, type ProviderMeasurement } from './providers/history.js';
 import { RefreshService, CachedSnapshot } from './refresh-service.js';
 import { loadSettings, saveSettings, Settings } from './settings.js';
 import { showNotification } from './notifications.js';
 import { createTray, destroyTray, updateTrayMenu } from './tray.js';
 import { IPC } from '../shared/types.js';
-import { assertTrustedIpcSender, validateResetCreditId, validateSettings } from './security.js';
+import { assertTrustedIpcSender, validateProviderId, validateResetCreditId, validateSettings, validateStatisticsSelection } from './security.js';
+import { ProviderService } from './providers/service.js';
+import { ProviderFetchError } from './providers/errors.js';
+import { PROVIDERS, type ProviderId, type ProviderRegion } from '../shared/providers.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -30,7 +34,13 @@ let mainWindow: BrowserWindow | null = null;
 let statsWindow: BrowserWindow | null = null;
 let trayEnabled = false;
 let tokenManager: TokenManager;
+const providerHistory = new ProviderHistoryStore();
+
+function statisticsUpdated(): void {
+  if (statsWindow && !statsWindow.isDestroyed()) statsWindow.webContents.send('stats:updated');
+}
 let refreshService: RefreshService;
+let providerService: ProviderService;
 
 app.enableSandbox();
 
@@ -169,6 +179,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.AUTH_IMPORT_CODEX, async (event) => {
     trusted(event);
+    if (!(await loadSettings()).codex_enabled) throw new Error('Codex monitoring is disabled.');
     const tokens = await readCodexAuth();
     await tokenManager.setTokens(tokens, 'codex-cli');
     // Kick off an immediate refresh
@@ -179,6 +190,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.AUTH_LOGOUT, async (event) => {
     trusted(event);
     await tokenManager.logout();
+    refreshService.clearSnapshot();
     return { ok: true };
   });
 
@@ -216,13 +228,39 @@ function registerIpcHandlers(): void {
     settings = validateSettings(settings);
     await saveSettings(settings);
     refreshService.updateSettings(settings);
+    providerService.updateSettings(settings);
+    statisticsUpdated();
     return { ok: true };
   });
 
-  ipcMain.handle(IPC.STATS_GET, async (event) => {
+  ipcMain.handle(IPC.PROVIDERS_GET, (event) => { trusted(event); return providerService.getSnapshots(); });
+  ipcMain.handle(IPC.PROVIDERS_REFRESH, (event, rawId?: unknown) => { trusted(event); return providerService.refresh(rawId === undefined ? undefined : validateProviderId(rawId)); });
+  ipcMain.handle(IPC.PROVIDERS_CONNECTIONS, (event) => { trusted(event); return providerService.connections(); });
+  const providerAction = (operation: (id: ReturnType<typeof validateProviderId>, value: unknown) => Promise<void>) =>
+    async (event: IpcMainInvokeEvent, rawId: unknown, value?: unknown) => {
+      trusted(event);
+      const id = validateProviderId(rawId);
+      try { await operation(id, value); return { ok: true as const, error: null }; }
+      catch (error) { return { ok: false as const, error: error instanceof ProviderFetchError ? error.code : 'keyring' }; }
+    };
+  ipcMain.handle(IPC.PROVIDER_SAVE_CREDENTIAL, providerAction((id, value) => providerService.setCredential(id, value)));
+  ipcMain.handle(IPC.PROVIDER_IMPORT_CREDENTIAL, providerAction((id) => providerService.importCredential(id)));
+  ipcMain.handle(IPC.PROVIDER_REMOVE_CREDENTIAL, providerAction((id) => providerService.removeCredential(id)));
+  ipcMain.handle(IPC.PROVIDER_OPEN_DASHBOARD, async (event, rawId: unknown) => {
     trusted(event);
-    const history = await readHistory();
-    return computeStatistics(history);
+    const id = validateProviderId(rawId);
+    const definition = PROVIDERS.find((provider) => provider.id === id)!;
+    const settings = await loadSettings();
+    const region = settings.providers.find((provider) => provider.id === id)?.region;
+    await shell.openExternal(region === 'china' && definition.chinaDashboard ? definition.chinaDashboard : definition.dashboard);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.STATS_GET, async (event, rawSelection: unknown) => {
+    trusted(event);
+    const selection = validateStatisticsSelection(rawSelection);
+    const [history, settings] = await Promise.all([readHistory(), loadSettings()]);
+    return statisticsReport(selection, settings, refreshService.getSnapshot(), history, providerHistory);
   });
 
   ipcMain.handle(IPC.WINDOW_OPEN_STATS, async (event) => {
@@ -248,7 +286,8 @@ function wireRefreshToUI(service: RefreshService): void {
   service.on('updated', (snap: CachedSnapshot) => {
     if (trayEnabled) {
       updateTrayMenu(snap, {
-        onRefresh: () => service.refreshNow(),
+        codexEnabled: service.isEnabled(),
+        onRefresh: () => { void Promise.allSettled([service.refreshNow(), providerService.refresh()]); },
         onQuit: () => {
           trayEnabled = false;
           destroyTray();
@@ -261,6 +300,10 @@ function wireRefreshToUI(service: RefreshService): void {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('snapshot:updated', snap);
     }
+    if (statsWindow && !statsWindow.isDestroyed()) {
+      statsWindow.webContents.send('snapshot:updated', snap);
+      statisticsUpdated();
+    }
   });
 }
 
@@ -269,7 +312,8 @@ async function initTray(): Promise<void> {
   trayEnabled = true;
   const initialSnap: CachedSnapshot = refreshService.getSnapshot();
   createTray(initialSnap, {
-    onRefresh: () => refreshService.refreshNow(),
+    codexEnabled: (await loadSettings()).codex_enabled,
+    onRefresh: () => { void Promise.allSettled([refreshService.refreshNow(), providerService.refresh()]); },
     onQuit: () => {
       trayEnabled = false;
       destroyTray();
@@ -293,6 +337,16 @@ app.whenReady().then(async () => {
   tokenManager = new TokenManager();
   await tokenManager.ready();
   refreshService = new RefreshService(tokenManager);
+  providerService = new ProviderService();
+  providerService.on('connection-changed', (id: ProviderId, region: ProviderRegion) => {
+    void providerHistory.rotate(id, region).then(statisticsUpdated).catch(() => console.error('Could not update provider history context.'));
+  });
+  providerService.on('measurement', (measurement: ProviderMeasurement) => {
+    void providerHistory.record(measurement).then(statisticsUpdated).catch(() => console.error('Could not save provider history.'));
+  });
+  providerService.on('updated', (snapshots) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('providers:updated', snapshots);
+  });
   wireRefreshToUI(refreshService);
 
   registerIpcHandlers();
@@ -304,6 +358,7 @@ app.whenReady().then(async () => {
 
   // Start auto-refresh
   await refreshService.start();
+  providerService.start(await loadSettings());
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -327,4 +382,5 @@ app.on('before-quit', () => {
   trayEnabled = false;
   destroyTray();
   refreshService.stop();
+  providerService.stop();
 });

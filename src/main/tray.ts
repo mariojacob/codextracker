@@ -35,7 +35,7 @@ function trayIconImage(): Electron.NativeImage {
   return cachedTrayIcon;
 }
 
-function buildMenu(snap: CachedSnapshot, onRefresh: () => void, onQuit: () => void, onShow: () => void): Menu {
+function buildMenu(snap: CachedSnapshot, onRefresh: () => void, onQuit: () => void, onShow: () => void, codexEnabled: boolean): Menu {
   // null = API didn't supply this window this tick; show "—" instead of "100%".
   const sessLabel = snap.session_pct_left != null
     ? `${snap.session_pct_left.toFixed(0)}%`
@@ -47,40 +47,36 @@ function buildMenu(snap: CachedSnapshot, onRefresh: () => void, onQuit: () => vo
     { label: 'CodexTracker', enabled: false },
     { type: 'separator' },
     {
-      label: snap.email ? `Account: ${snap.email}` : 'Not signed in',
+      label: !codexEnabled ? 'ChatGPT / Codex disabled' : snap.email ? `ChatGPT / Codex: ${snap.email}` : 'ChatGPT / Codex: Not signed in',
       enabled: false,
     },
     {
       label: snap.plan ? `Plan: ${snap.plan}` : '',
       enabled: false,
-      visible: snap.plan.length > 0,
+      visible: codexEnabled && snap.plan.length > 0,
     },
     { type: 'separator' },
     {
       label: `Session: ${sessLabel} left (${snap.session_reset_in})`,
       enabled: false,
-      visible: snap.session_window_available,
+      visible: codexEnabled && snap.session_window_available,
     },
     {
       label: `Weekly: ${wkLabel} left (${snap.weekly_reset_in})`,
       enabled: false,
-    },
-    {
-      label: snap.forecast
-        ? `Reset forecast: ${Math.round(snap.forecast.score)}% in next 48h`
-        : 'Reset forecast: —',
-      enabled: false,
-      visible: snap.forecast !== null || snap.forecast_error !== null,
+      visible: codexEnabled,
     },
     {
       label: snap.credits_balance != null
         ? `Credits: ${snap.credits_balance}`
         : 'Credits: —',
       enabled: false,
+      visible: codexEnabled,
     },
     {
       label: `Reset credits: ${snap.reset_credits_available}`,
       enabled: false,
+      visible: codexEnabled,
     },
     { type: 'separator' },
     { label: 'Refresh now', click: () => onRefresh() },
@@ -91,6 +87,7 @@ function buildMenu(snap: CachedSnapshot, onRefresh: () => void, onQuit: () => vo
 }
 
 export interface TrayCallbacks {
+  codexEnabled: boolean;
   onRefresh: () => void;
   onQuit: () => void;
   onShow: () => void;
@@ -101,7 +98,7 @@ export function createTray(snap: CachedSnapshot, callbacks: TrayCallbacks): Tray
   try {
     trayInstance = new Tray(trayIconImage());
     trayInstance.setToolTip('CodexTracker');
-    trayInstance.setContextMenu(buildMenu(snap, callbacks.onRefresh, callbacks.onQuit, callbacks.onShow));
+    trayInstance.setContextMenu(buildMenu(snap, callbacks.onRefresh, callbacks.onQuit, callbacks.onShow, callbacks.codexEnabled));
     trayInstance.on('double-click', () => callbacks.onShow());
     return trayInstance;
   } catch (err) {
@@ -112,20 +109,17 @@ export function createTray(snap: CachedSnapshot, callbacks: TrayCallbacks): Tray
 
 export function updateTrayMenu(snap: CachedSnapshot, callbacks: TrayCallbacks): void {
   if (!trayInstance) return;
-  trayInstance.setContextMenu(buildMenu(snap, callbacks.onRefresh, callbacks.onQuit, callbacks.onShow));
+  trayInstance.setContextMenu(buildMenu(snap, callbacks.onRefresh, callbacks.onQuit, callbacks.onShow, callbacks.codexEnabled));
   // null = API didn't supply a window this tick; show "—" instead of "100%".
   const wkLabel = snap.weekly_pct_left != null ? `${snap.weekly_pct_left.toFixed(0)}%` : '—';
-  const forecastPart = snap.forecast
-    ? `, Forecast ${Math.round(snap.forecast.score)}%`
-    : '';
-  const tooltip = snap.error
+  const tooltip = !callbacks.codexEnabled ? 'CodexTracker' : snap.error
     ? `CodexTracker: error`
     : snap.session_window_available
       ? (() => {
           const sessLabel = snap.session_pct_left != null ? `${snap.session_pct_left.toFixed(0)}%` : '—';
-          return `CodexTracker: Session ${sessLabel}, Weekly ${wkLabel}${forecastPart}`;
+          return `CodexTracker: Session ${sessLabel}, Weekly ${wkLabel}`;
         })()
-      : `CodexTracker: Weekly ${wkLabel}${forecastPart}`;
+      : `CodexTracker: Weekly ${wkLabel}`;
   trayInstance.setToolTip(tooltip);
 }
 
