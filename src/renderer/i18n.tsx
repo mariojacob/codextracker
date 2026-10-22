@@ -12,6 +12,9 @@ import type { Language } from '../shared/types.js';
 type Dict = Record<string, string>;
 
 const en: Dict = {
+  'modules.drag': 'Drag to move {name}',
+  'modules.up': 'Move {name} up',
+  'modules.down': 'Move {name} down',
   'providers.warning.balance_unavailable': 'The provider reports this balance as unavailable for API calls.',
   'providers.warning.monthly_exhausted': 'Monthly pool exhausted. Shorter-window allowance cannot be used until this limit resets.',
   "providers.title": "Providers & modules",
@@ -80,6 +83,8 @@ const en: Dict = {
   'budget.unavailable': 'Daily budget unavailable without a valid weekly reset.',
   'budget.note': 'Unused budget carries over until the weekly reset.',
   'credits.unknownExpiry': 'Expiry unknown',
+  'credits.expiryMarker': '{name} expires: {when}',
+  'credits.expiryLegend': 'Banked reset expires · hover over a marker for the time',
   'credits.soon': 'Expires soon',
   'credits.urgent': 'Expires within 24h',
 
@@ -91,7 +96,7 @@ const en: Dict = {
   'app.footer.updated': 'Updated',
   'app.footer.never': 'Not signed in',
   'app.footer.neverLowercase': 'never',
-  'app.version': 'v2.2.0',
+  'app.version': 'v2.3.0',
 
   // Account / status
   'account.notSignedIn': 'Not signed in',
@@ -167,6 +172,9 @@ const en: Dict = {
 };
 
 const de: Dict = {
+  'modules.drag': '{name} durch Ziehen verschieben',
+  'modules.up': '{name} nach oben verschieben',
+  'modules.down': '{name} nach unten verschieben',
   'providers.warning.balance_unavailable': 'Der Anbieter meldet dieses Guthaben als nicht für API-Aufrufe verfügbar.',
   'providers.warning.monthly_exhausted': 'Monatskontingent ausgeschöpft. Kürzere Kontingente sind bis zu dessen Reset nicht nutzbar.',
   "providers.title": "Anbieter & Module",
@@ -235,6 +243,8 @@ const de: Dict = {
   'budget.unavailable': 'Tagesbudget ohne gültigen Wochenreset nicht verfügbar.',
   'budget.note': 'Ungenutztes Budget bleibt bis zum Wochenreset erhalten.',
   'credits.unknownExpiry': 'Ablauf unbekannt',
+  'credits.expiryMarker': '{name} läuft ab: {when}',
+  'credits.expiryLegend': 'Banked Reset läuft ab · Zeitpunkt beim Darüberfahren',
   'credits.soon': 'Läuft bald ab',
   'credits.urgent': 'Läuft innerhalb von 24 Std. ab',
 
@@ -245,7 +255,7 @@ const de: Dict = {
   'app.footer.updated': 'Aktualisiert',
   'app.footer.never': 'Nicht angemeldet',
   'app.footer.neverLowercase': 'nie',
-  'app.version': 'v2.2.0',
+  'app.version': 'v2.3.0',
 
   'account.notSignedIn': 'Nicht angemeldet',
   'status.ok': 'OK',

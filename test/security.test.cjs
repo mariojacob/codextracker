@@ -1,9 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { assertTrustedIpcSender, validateResetCreditId, validateSettings } = require('../dist-main/main/security.js');
+const { moduleOrder } = require('../dist-main/shared/modules.js');
 
 function validSettings() {
-  return { codex_enabled: true, providers: [], refresh_seconds: 60, history_days: 30, language: 'en', notifications: { enabled: true, rules: [{ id: 'weekly-low', card: 'weekly', field: 'pct_left', threshold: 20, enabled: true }] } };
+  return { codex_enabled: true, providers: [], module_order: moduleOrder(), refresh_seconds: 60, history_days: 30, language: 'en', notifications: { enabled: true, rules: [{ id: 'weekly-low', card: 'weekly', field: 'pct_left', threshold: 20, enabled: true }] } };
 }
 
 test('IPC accepts only a known window main frame', () => {

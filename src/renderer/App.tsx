@@ -5,7 +5,7 @@
  *   - Compact metric sections via Cards (or LoginPrompt when not authed)
  *   - SettingsDialog (modal) — language switcher lives here
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LoginPrompt } from './components/LoginPrompt.js';
 import { Cards } from './components/Cards.js';
 import { SettingsDialog } from './components/SettingsDialog.js';
@@ -14,6 +14,7 @@ import { useProviders } from './hooks/useProviders.js';
 import { ProviderCards } from './components/ProviderCards.js';
 import { LocaleProvider, useLocale } from './i18n.js';
 import type { Settings } from '../shared/types.js';
+import { moveModule, type ModuleId } from '../shared/modules.js';
 
 function statusClass(pct: number | null, snapshotError: string | null | undefined): 'ok' | 'warn' | 'err' {
   if (snapshotError) return 'err';
@@ -30,6 +31,27 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
   const providers = useProviders();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderError, setOrderError] = useState(false);
+  const orderSavePending = useRef(false);
+
+  async function handleMoveModule(source: ModuleId, target: ModuleId) {
+    if (orderSavePending.current || settingsOpen || source === target) return;
+    orderSavePending.current = true;
+    setOrderSaving(true);
+    setOrderError(false);
+    const next = { ...currentSettings, module_order: moveModule(currentSettings.module_order, source, target) };
+    try {
+      const result = await window.codexAPI.setSettings(next);
+      if (!result.ok) throw new Error('Settings save failed.');
+      setCurrentSettings(next);
+    } catch {
+      setOrderError(true);
+    } finally {
+      orderSavePending.current = false;
+      setOrderSaving(false);
+    }
+  }
 
   async function handleRefresh() {
     setBusy(true);
@@ -87,6 +109,7 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
         <button
           className="icon-btn"
           onClick={() => setSettingsOpen(true)}
+          disabled={orderSaving}
           title={t('app.settings.tooltip')}
         >
           ⚙
@@ -94,10 +117,13 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
       </header>
 
       <main className="app-main">
-        <ProviderCards snapshots={providers.snapshots} error={providers.error} codex={codexEnabled ?
+        {orderError && <div className="error-banner" role="alert">{t('providers.error.settings')}</div>}
+        <ProviderCards snapshots={providers.snapshots} error={providers.error}
+          order={currentSettings.module_order} onMove={handleMoveModule} saving={orderSaving || settingsOpen} codex={codexEnabled ? (controls) =>
           <section className="provider-card provider-codex">
             <div className="provider-card-head"><h3>ChatGPT / Codex</h3>
               {(snapshot?.plan || auth?.plan) && <span className="header-plan">{snapshot?.plan || auth?.plan}</span>}
+              {controls}
             </div>
             {isAuthed && (auth?.email || snapshot?.email) && <p className="provider-note provider-account">{auth?.email || snapshot?.email}</p>}
             {isAuthed ? <>

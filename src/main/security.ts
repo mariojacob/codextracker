@@ -1,6 +1,7 @@
 import type { Settings } from '../shared/types.js';
 import { PROVIDERS, PROVIDER_IDS, type ProviderId, type ProviderSettings } from '../shared/providers.js';
 import type { StatisticsSelection } from '../shared/provider-statistics.js';
+import { MODULE_IDS, moduleOrder, type ModuleId } from '../shared/modules.js';
 
 const ALLOWED_CARDS = new Set(['session', 'weekly', 'credits', 'resets']);
 
@@ -40,6 +41,11 @@ export function validateSettings(value: unknown): Settings {
   const historyDays = boundedInteger(input.history_days, 1, 365, 'history_days');
   if (input.language !== 'en' && input.language !== 'de') throw new Error('Unsupported language.');
   const providers = validateProviderSettings(input.providers ?? []);
+  const order = input.module_order === undefined ? [] : input.module_order;
+  if (!Array.isArray(order) || order.length > MODULE_IDS.length ||
+      order.some((id) => !MODULE_IDS.includes(id as ModuleId)) || new Set(order).size !== order.length) {
+    throw new Error('Invalid module order.');
+  }
 
   const notifications = input.notifications;
   if (!notifications || typeof notifications !== 'object') throw new Error('Invalid notifications settings.');
@@ -73,6 +79,7 @@ export function validateSettings(value: unknown): Settings {
   return {
     codex_enabled: codexEnabled,
     providers,
+    module_order: moduleOrder(order as ModuleId[]),
     refresh_seconds: refresh,
     history_days: historyDays,
     language: input.language,

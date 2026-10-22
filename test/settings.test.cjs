@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { loadSettings } = require('../dist-main/main/settings.js');
+const { loadSettings, saveSettings } = require('../dist-main/main/settings.js');
+const { moduleOrder, moveModule } = require('../dist-main/shared/modules.js');
 
 test('loading legacy settings persists migration and preserves unrelated rules and preferences', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codextracker-settings-test-'));
@@ -24,6 +25,7 @@ test('loading legacy settings persists migration and preserves unrelated rules a
     const loaded = await loadSettings();
     assert.equal(loaded.language, 'de');
     assert.equal(loaded.codex_enabled, true, 'existing installations keep Codex enabled');
+    assert.deepEqual(loaded.module_order, moduleOrder());
     assert.equal(loaded.refresh_seconds, 120);
     assert.equal(loaded.notifications.enabled, false);
     assert.deepEqual(loaded.notifications.rules, [legacy.notifications.rules[0]]);
@@ -31,6 +33,9 @@ test('loading legacy settings persists migration and preserves unrelated rules a
     assert.deepEqual(await loadSettings(), loaded, 'migration remains stable on the next load');
     await fs.writeFile(file, JSON.stringify({ ...loaded, codex_enabled: false }));
     assert.equal((await loadSettings()).codex_enabled, false, 'disabled module persists across restart');
+    const reordered = { ...loaded, module_order: moveModule(loaded.module_order, 'antigravity', 'codex') };
+    await saveSettings(reordered);
+    assert.deepEqual(await loadSettings(), reordered, 'module order survives a restart');
   } finally {
     os.homedir = originalHome;
     await fs.unlink(file).catch(() => {});

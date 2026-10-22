@@ -1,6 +1,6 @@
 {
   "name": "codex-tracker",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "CodexTracker — Electron app for tracking your ChatGPT/Codex usage",
   "author": "Mario Jacob",
   "license": "MIT",

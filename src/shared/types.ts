@@ -1,5 +1,6 @@
 // Shared types used by both main and renderer processes.
 import type { ProviderSettings } from './providers.js';
+import type { ModuleId } from './modules.js';
 
 /** Notification rule. Mirrors settings.ts:NotificationRule (kept in sync). */
 export interface NotificationRule {
@@ -17,6 +18,8 @@ export interface Settings {
   /** Existing installations keep Codex enabled until explicitly disabled. */
   codex_enabled: boolean;
   providers: ProviderSettings[];
+  /** Dashboard positions, retained when a module is disabled. */
+  module_order: ModuleId[];
   refresh_seconds: number;
   notifications: {
     enabled: boolean;

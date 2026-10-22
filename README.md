@@ -5,13 +5,13 @@
 Monitor subscription quotas, plan your daily allowance, and follow API balances with a portable Windows app. Choose the modules you use: ChatGPT / Codex, Antigravity, Claude, Cursor, Grok, MiniMax, z.ai, Kimi and more.
 
 <p>
-  <img src="https://img.shields.io/badge/version-2.2.0-10a37f" alt="Version 2.2.0">
+  <img src="https://img.shields.io/badge/version-2.3.0-10a37f" alt="Version 2.3.0">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-64748b" alt="Windows x64">
   <img src="https://img.shields.io/badge/install-portable-64748b" alt="Portable application">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748b" alt="MIT license"></a>
 </p>
 
-[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.2.0](docs/releases/v2.2.0.md)
+[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.3.0](docs/releases/v2.3.0.md)
 
 ![CodexTracker 2.2.0: Codex daily budget, expiring banked resets, Antigravity quotas and separate API balances](docs/images/v2.2.0-dashboard.jpg)
 
@@ -22,7 +22,7 @@ Monitor subscription quotas, plan your daily allowance, and follow API balances 
 | Plan your usage | Understand your history | Choose your stack |
 | --- | --- | --- |
 | Used **and** remaining quota, reset times, seven budget-day segments and an even-pace marker. | Current/previous day and 7-/30-day views, with observed consumption and visible data gaps. | Enable or disable each module in Settings, including ChatGPT / Codex. |
-| Banked resets sorted by expiry, with clear 72-hour and 24-hour highlights. | Separate provider, region, model quota and currency selectors. | Subscription quotas and API balances/spend stay in separate groups. |
+| Banked resets sorted by expiry, with 72-hour and 24-hour highlights and expiry markers on the weekly bar. | Separate provider, region, model quota and currency selectors. | Reorder modules with drag-and-drop or up/down arrows; your layout is saved automatically. |
 | Unused daily allowance carries forward within the weekly window. | Balance decreases, increases and vendor-reported cost trends retain their meaning. | English/German UI, local history and Windows Credential Manager storage. |
 
 CodexTracker does not estimate token counts or API costs. It displays balances and expenses only when the provider reports them.
@@ -34,6 +34,8 @@ CodexTracker does not estimate token counts or API costs. It displays balances a
 | ChatGPT / Codex, Antigravity, Claude, Cursor, Grok / SuperGrok, MiniMax Coding / Token Plan, z.ai / GLM, Kimi Code | DeepSeek, Moonshot / Kimi API, xAI / Grok API, Anthropic / Claude API |
 
 Open **Settings → Providers & modules** to configure each service. Additional providers are off by default; Codex remains enabled for compatibility. Disabling a module stops its polling while preserving its saved login and history. Some integrations require a specific plan key, session cookie, OAuth login, management key or organization Admin key. See the [setup guide and compatibility notes](docs/providers.md).
+
+Reorder dashboard modules using the drag handle or the up/down arrows in each module header. The order is saved automatically and retained when modules are disabled and enabled again.
 
 > **Community project:** Not affiliated with or endorsed by the supported providers. Several integrations, including Codex's ChatGPT `/backend-api/wham/*` endpoints, use private interfaces that may change or become unavailable.
 

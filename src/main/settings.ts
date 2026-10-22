@@ -7,12 +7,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Settings, NotificationRule } from '../shared/types.js';
 import { validateSettings } from './security.js';
+import { moduleOrder } from '../shared/modules.js';
 
 export type { Settings, NotificationRule };
 
 const DEFAULT_SETTINGS: Settings = {
   codex_enabled: true,
   providers: [],
+  module_order: moduleOrder(),
   refresh_seconds: 60,
   notifications: {
     enabled: true,

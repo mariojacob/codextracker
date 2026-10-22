@@ -43,6 +43,24 @@ export function availableResetCredits(credits: ResetCreditEntry[], now = Date.no
     .sort((a, b) => (creditExpiry(a) ?? Infinity) - (creditExpiry(b) ?? Infinity));
 }
 
+/** Upcoming credit expiries on the current weekly bar's reset-anchored time scale. */
+export function resetExpiryMarkers(
+  credits: ResetCreditEntry[],
+  resetAt: number | null | undefined,
+  windowSeconds: number | null | undefined,
+  now = Date.now(),
+): { credit: ResetCreditEntry; expiresAt: number; pct: number }[] {
+  if (resetAt == null || !Number.isFinite(resetAt) || windowSeconds !== WEEK_SECONDS || !Number.isFinite(now)) return [];
+  const start = resetAt - windowSeconds * 1000;
+  if (now < start || now >= resetAt) return [];
+  return availableResetCredits(credits, now).flatMap((credit) => {
+    const expiresAt = creditExpiry(credit);
+    return expiresAt == null || expiresAt > resetAt ? [] : [{
+      credit, expiresAt, pct: (expiresAt - start) / (resetAt - start) * 100,
+    }];
+  });
+}
+
 export function expiryUrgency(expiresAt: number | null, now = Date.now()): 'normal' | 'warn' | 'err' | 'expired' {
   if (expiresAt == null || !Number.isFinite(expiresAt)) return 'normal';
   const remaining = expiresAt - now;

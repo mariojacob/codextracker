@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DAY_MS, WEEK_SECONDS, weeklyBudget, availableResetCredits, expiryUrgency } = require('../dist-main/shared/quota.js');
+const { DAY_MS, WEEK_SECONDS, weeklyBudget, availableResetCredits, expiryUrgency, resetExpiryMarkers } = require('../dist-main/shared/quota.js');
 const reset = Date.parse('2026-10-26T15:00:00Z');
 const start = reset - 7 * DAY_MS;
 
@@ -64,4 +64,27 @@ test('reset urgency uses inclusive 72h/24h boundaries and removes expired credit
   const credits = [credit('unknown', null), credit('later', now + 5 * DAY_MS), credit('expired', now), credit('soon', now + DAY_MS), credit('redeemed', now + DAY_MS, 'used'), { id: 'invalid', status: 'available', expires_at: 'invalid' }];
   assert.deepEqual(availableResetCredits(credits, now).map((c) => c.id), ['soon', 'later', 'unknown', 'invalid']);
   assert.equal(credits[0].id, 'unknown', 'sorting must not mutate the source');
+});
+
+test('banked reset expiry markers use the weekly time scale and only upcoming available expiries', () => {
+  const credit = (id, at, status = 'available') => ({ id, status, expires_at: new Date(at).toISOString() });
+  const credits = [
+    credit('end', reset), credit('outside', reset + 1), credit('past', start),
+    credit('used', start + 4 * DAY_MS, 'used'), credit('middle', start + 3.5 * DAY_MS),
+    { id: 'unknown', status: 'available' }, { id: 'invalid', status: 'available', expires_at: 'invalid' },
+  ];
+  const markers = resetExpiryMarkers(credits, reset, WEEK_SECONDS, start + DAY_MS);
+  assert.deepEqual(markers.map(({ credit, pct }) => [credit.id, pct]), [['middle', 50], ['end', 100]]);
+  assert.equal(markers[0].expiresAt, start + 3.5 * DAY_MS);
+  assert.equal(credits[0].id, 'end', 'source order is preserved');
+  assert.deepEqual(resetExpiryMarkers(credits, reset, WEEK_SECONDS, start + 3.5 * DAY_MS).map(m => m.credit.id), ['end']);
+});
+
+test('expiry markers disappear for missing, invalid or inactive weekly windows', () => {
+  const credits = [{ id: 'reset', status: 'available', expires_at: new Date(reset).toISOString() }];
+  for (const [at, seconds, now] of [
+    [null, WEEK_SECONDS, start], [NaN, WEEK_SECONDS, start], [Infinity, WEEK_SECONDS, start],
+    [reset, null, start], [reset, 18000, start], [reset, WEEK_SECONDS, NaN],
+    [reset, WEEK_SECONDS, start - 1], [reset, WEEK_SECONDS, reset],
+  ]) assert.deepEqual(resetExpiryMarkers(credits, at, seconds, now), []);
 });

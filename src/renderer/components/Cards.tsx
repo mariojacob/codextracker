@@ -1,7 +1,7 @@
 import { Section } from './Section.js';
 import { useLocale, makeRelativeFormatter } from '../i18n.js';
 import { useNow } from '../hooks/useNow.js';
-import { availableResetCredits, creditExpiry, expiryUrgency, weeklyBudget } from '../../shared/quota.js';
+import { availableResetCredits, creditExpiry, expiryUrgency, resetExpiryMarkers, weeklyBudget } from '../../shared/quota.js';
 import type { CachedSnapshot, Language } from '../../shared/types.js';
 
 function absolute(timestamp: number | null | undefined, locale: Language): string {
@@ -24,6 +24,11 @@ export function Cards({ snapshot }: { snapshot: CachedSnapshot | null }) {
   const credits = availableResetCredits(snapshot?.reset_credit_details ?? [], now);
   const nextExpiry = credits.map(creditExpiry).find((expiry) => expiry != null) ?? null;
   const nextUrgency = expiryUrgency(nextExpiry, now);
+  const expiryMarkers = resetExpiryMarkers(credits, snapshot?.weekly_reset_at, snapshot?.weekly_window_seconds, now)
+    .map(({ credit, expiresAt, pct }) => ({
+      id: credit.id, pct, urgency: expiryUrgency(expiresAt, now),
+      label: t('credits.expiryMarker', { name: credit.title || credit.id.slice(0, 12), when: resetLabel(expiresAt) }),
+    }));
   return <>
     {snapshot?.error && <div className="error-banner">{snapshot.error}</div>}
     {snapshot?.session_window_available && <Section
@@ -35,6 +40,7 @@ export function Cards({ snapshot }: { snapshot: CachedSnapshot | null }) {
     <Section title={t('section.weekly')} hint={usage(weekly)} progressLabel={usage(weekly)}
       pct={weekly == null ? null : 100 - weekly} warn={weekly != null && weekly < 30} err={weekly != null && weekly < 10}
       currentDay={budget?.day} timeMarker={budget?.elapsedPct}
+      expiryMarkers={budget ? expiryMarkers : []}
       markerLabel={budget ? t('budget.marker', { pct: number(budget.elapsedPct) }) : undefined}
       meta={[{ label: t('meta.reset'), value: resetLabel(snapshot?.weekly_reset_at), muted: true },
         { label: budget ? t('budget.day', { day: budget.day }) : t('meta.left'), value: budget ? t('budget.target', { pct: number(budget.targetPct) }) : weekly == null ? '—' : `${number(weekly)} %` }]}>
@@ -42,6 +48,7 @@ export function Cards({ snapshot }: { snapshot: CachedSnapshot | null }) {
         <div>{t('budget.available', { when: absolute(budget.dayEnd, locale), n: number(budget.available) })}</div>
         {budget.over > 0 && <div className="budget-over">{t('budget.over', { n: number(budget.over) })}</div>}
         <div className="budget-legend"><span className="legend-tick" />{t('budget.marker', { pct: number(budget.elapsedPct) })}</div>
+        {!!expiryMarkers.length && <div className="budget-legend"><span className="legend-expiry" />{t('credits.expiryLegend')}</div>}
       </div> : <div className="budget-unavailable">{t('budget.unavailable')}</div>}
     </Section>
 
