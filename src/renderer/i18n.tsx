@@ -12,6 +12,23 @@ import type { Language } from '../shared/types.js';
 type Dict = Record<string, string>;
 
 const en: Dict = {
+  'manual.day': 'Budget day {day}',
+  'manual.display': 'Display',
+  'manual.auto': 'Automatic',
+  'manual.title': 'Manual reset',
+  'manual.edit': 'Edit reset',
+  'manual.add': 'Set reset',
+  'manual.once': 'One-time reset · no repetition',
+  'manual.date': 'Date and time (local time)',
+  'manual.save': 'Save',
+  'manual.cancel': 'Cancel',
+  'manual.remove': 'Remove reset',
+  'manual.expired': 'Expired · automatic display',
+  'manual.missing': 'Quota unavailable · automatic display',
+  'manual.invalid': 'Enter a future date and time. Usage data must be available for this module.',
+  'manual.help': 'This date applies once. The module’s main quota is selected automatically. Choose Manual reset to align your budget with this deadline. No reset is triggered automatically.',
+  'manual.budgetNote': 'Unused allowance carries over until the manual planning deadline.',
+
   'modules.drag': 'Drag to move {name}',
   'modules.up': 'Move {name} up',
   'modules.down': 'Move {name} down',
@@ -96,7 +113,7 @@ const en: Dict = {
   'app.footer.updated': 'Updated',
   'app.footer.never': 'Not signed in',
   'app.footer.neverLowercase': 'never',
-  'app.version': 'v2.3.0',
+  'app.version': 'v2.4.3',
 
   // Account / status
   'account.notSignedIn': 'Not signed in',
@@ -172,6 +189,23 @@ const en: Dict = {
 };
 
 const de: Dict = {
+  'manual.day': 'Budgettag {day}',
+  'manual.display': 'Anzeige',
+  'manual.auto': 'Automatisch',
+  'manual.title': 'Manueller Reset',
+  'manual.edit': 'Reset bearbeiten',
+  'manual.add': 'Reset eintragen',
+  'manual.once': 'Einmaliger Reset · keine Wiederholung',
+  'manual.date': 'Datum und Uhrzeit (Ortszeit)',
+  'manual.save': 'Speichern',
+  'manual.cancel': 'Abbrechen',
+  'manual.remove': 'Reset entfernen',
+  'manual.expired': 'Abgelaufen · automatische Anzeige',
+  'manual.missing': 'Limit nicht verfügbar · automatische Anzeige',
+  'manual.invalid': 'Bitte Datum und Uhrzeit in der Zukunft eintragen. Für dieses Modul müssen Verbrauchsdaten verfügbar sein.',
+  'manual.help': 'Dieser Termin gilt einmalig. Das Hauptkontingent des Moduls wird automatisch gewählt. Mit Manueller Reset richtet sich dein Budget nach diesem Termin. Ein Reset wird nicht automatisch ausgelöst.',
+  'manual.budgetNote': 'Ungenutztes Budget bleibt bis zum manuell geplanten Reset erhalten.',
+
   'modules.drag': '{name} durch Ziehen verschieben',
   'modules.up': '{name} nach oben verschieben',
   'modules.down': '{name} nach unten verschieben',
@@ -255,7 +289,7 @@ const de: Dict = {
   'app.footer.updated': 'Aktualisiert',
   'app.footer.never': 'Nicht angemeldet',
   'app.footer.neverLowercase': 'nie',
-  'app.version': 'v2.3.0',
+  'app.version': 'v2.4.3',
 
   'account.notSignedIn': 'Nicht angemeldet',
   'status.ok': 'OK',

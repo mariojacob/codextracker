@@ -5,13 +5,13 @@
 Monitor subscription quotas, plan your daily allowance, and follow API balances with a portable Windows app. Choose the modules you use: ChatGPT / Codex, Antigravity, Claude, Cursor, Grok, MiniMax, z.ai, Kimi and more.
 
 <p>
-  <img src="https://img.shields.io/badge/version-2.3.0-10a37f" alt="Version 2.3.0">
+  <img src="https://img.shields.io/badge/version-2.4.3-10a37f" alt="Version 2.4.3">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-64748b" alt="Windows x64">
   <img src="https://img.shields.io/badge/install-portable-64748b" alt="Portable application">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748b" alt="MIT license"></a>
 </p>
 
-[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.3.0](docs/releases/v2.3.0.md)
+[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.4.3](docs/releases/v2.4.3.md)
 
 ![CodexTracker 2.2.0: Codex daily budget, expiring banked resets, Antigravity quotas and separate API balances](docs/images/v2.2.0-dashboard.jpg)
 
@@ -36,6 +36,10 @@ CodexTracker does not estimate token counts or API costs. It displays balances a
 Open **Settings → Providers & modules** to configure each service. Additional providers are off by default; Codex remains enabled for compatibility. Disabling a module stops its polling while preserving its saved login and history. Some integrations require a specific plan key, session cookie, OAuth login, management key or organization Admin key. See the [setup guide and compatibility notes](docs/providers.md).
 
 Reorder dashboard modules using the drag handle or the up/down arrows in each module header. The order is saved automatically and retained when modules are disabled and enabled again.
+
+Use **Set reset** inside a module to save a manual reset date and time in your local timezone. Enter a one-time deadline; the main quota is selected automatically. Then choose **Display → Manual reset** to align its pace marker and daily budget with that deadline. The purple marker identifies the manual reset; in automatic mode it appears on the provider's time scale when the deadline falls within that window. You can edit or remove the deadline at any time. Saved dates and display choices survive a restart. Expired deadlines return to the automatic display until updated.
+
+Manual reset dates are planning aids and do not redeem a reset credit or change provider usage. Plans retain the reported cycle start when available; otherwise they distribute the remaining allowance from the time the plan was created. Editing an upcoming deadline preserves that starting point. Statistics continue to use the provider's reported reset windows.
 
 > **Community project:** Not affiliated with or endorsed by the supported providers. Several integrations, including Codex's ChatGPT `/backend-api/wham/*` endpoints, use private interfaces that may change or become unavailable.
 
@@ -106,6 +110,8 @@ Budget days are seven equal 24-hour periods anchored to the weekly reset instant
 Statistics sum observed decreases in remaining weekly quota within the same reset window, expressed as percentage points. Resets, absent measurements, and gaps longer than the larger of five minutes or twice the polling interval are not interpreted as consumption. Short intervals crossing a budget-day boundary are split proportionally and marked approximate. Hatched chart areas and incomplete totals show missing coverage. Older history remains on disk but is not used to reconstruct daily consumption because it lacks reliable reset information. Credit decreases and increases are observed balance changes, not billing estimates. Totals over multiple reset windows may exceed 100 percentage points.
 
 Available banked resets are sorted by expiry, highlighted yellow within 72 hours and red within 24 hours. Unknown expiry dates are labeled explicitly. Highlighting does not redeem a reset or create an extra notification.
+
+Windows taskbar icons are retained under `.codex-tracker/shell` so their paths remain valid across portable app restarts and updates.
 
 Signing out removes the Credential Manager entry and non-secret authentication metadata. It intentionally keeps settings and history. To remove all local application data, close CodexTracker, delete `%USERPROFILE%\.codex-tracker`, and remove the `CodexTracker` / `codex-oauth-refresh-token` entry from Windows Credential Manager if it still exists.
 

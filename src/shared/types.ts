@@ -1,6 +1,7 @@
 // Shared types used by both main and renderer processes.
 import type { ProviderSettings } from './providers.js';
 import type { ModuleId } from './modules.js';
+import type { ManualReset } from './manual-reset.js';
 
 /** Notification rule. Mirrors settings.ts:NotificationRule (kept in sync). */
 export interface NotificationRule {
@@ -20,6 +21,7 @@ export interface Settings {
   providers: ProviderSettings[];
   /** Dashboard positions, retained when a module is disabled. */
   module_order: ModuleId[];
+  manual_resets?: Partial<Record<ModuleId, ManualReset>>;
   refresh_seconds: number;
   notifications: {
     enabled: boolean;

@@ -1,7 +1,10 @@
 import { Section } from './Section.js';
 import { useLocale, makeRelativeFormatter } from '../i18n.js';
 import { useNow } from '../hooks/useNow.js';
-import { availableResetCredits, creditExpiry, expiryUrgency, resetExpiryMarkers, weeklyBudget } from '../../shared/quota.js';
+import { availableResetCredits, creditExpiry, expiryUrgency } from '../../shared/quota.js';
+import { ManualResetControl, type SaveManualReset } from './ManualResetControl.js';
+import { QuotaSection } from './QuotaSection.js';
+import type { ManualReset, ResetWindow } from '../../shared/manual-reset.js';
 import type { CachedSnapshot, Language } from '../../shared/types.js';
 
 function absolute(timestamp: number | null | undefined, locale: Language): string {
@@ -11,46 +14,26 @@ function absolute(timestamp: number | null | undefined, locale: Language): strin
   });
 }
 
-export function Cards({ snapshot }: { snapshot: CachedSnapshot | null }) {
+export function Cards({ snapshot, manualReset, onManualReset, saving }: { snapshot: CachedSnapshot | null; manualReset?: ManualReset; onManualReset: SaveManualReset; saving: boolean }) {
   const { t, locale } = useLocale();
   const now = useNow();
   const number = (n: number) => n.toLocaleString(locale === 'de' ? 'de-AT' : 'en-GB', { maximumFractionDigits: 1 });
   const relative = makeRelativeFormatter(locale);
   const resetLabel = (timestamp: number | null | undefined) => timestamp == null ? '—' : `${absolute(timestamp, locale)} · ${relative(timestamp - now)}`;
-  const usage = (left: number | null | undefined) => left == null ? '—' : t('quota.usage', { used: number(100 - left), left: number(left) });
-  const session = snapshot?.session_pct_left;
-  const weekly = snapshot?.weekly_pct_left;
-  const budget = weeklyBudget(weekly, snapshot?.weekly_reset_at, snapshot?.weekly_window_seconds, now);
+  const windows: ResetWindow[] = [
+    { id: 'weekly', label: t('section.weekly'), used_percent: snapshot?.weekly_pct_left == null ? null : 100 - snapshot.weekly_pct_left,
+      reset_at: snapshot?.weekly_reset_at ?? null, window_seconds: snapshot?.weekly_window_seconds ?? null },
+    ...(snapshot?.session_window_available ? [{ id: 'session', label: t('section.session'), used_percent: snapshot.session_pct_left == null ? null : 100 - snapshot.session_pct_left,
+      reset_at: snapshot.session_reset_at, window_seconds: 18_000 }] : []),
+  ];
   const credits = availableResetCredits(snapshot?.reset_credit_details ?? [], now);
   const nextExpiry = credits.map(creditExpiry).find((expiry) => expiry != null) ?? null;
   const nextUrgency = expiryUrgency(nextExpiry, now);
-  const expiryMarkers = resetExpiryMarkers(credits, snapshot?.weekly_reset_at, snapshot?.weekly_window_seconds, now)
-    .map(({ credit, expiresAt, pct }) => ({
-      id: credit.id, pct, urgency: expiryUrgency(expiresAt, now),
-      label: t('credits.expiryMarker', { name: credit.title || credit.id.slice(0, 12), when: resetLabel(expiresAt) }),
-    }));
   return <>
     {snapshot?.error && <div className="error-banner">{snapshot.error}</div>}
-    {snapshot?.session_window_available && <Section
-      title={t('section.session')} hint={usage(session)} progressLabel={usage(session)}
-      pct={session == null ? null : 100 - session} warn={session != null && session < 30} err={session != null && session < 10}
-      meta={[{ label: t('meta.reset'), value: resetLabel(snapshot.session_reset_at), muted: true },
-        { label: t('meta.left'), value: session == null ? '—' : `${number(session)} %` }]} />}
-
-    <Section title={t('section.weekly')} hint={usage(weekly)} progressLabel={usage(weekly)}
-      pct={weekly == null ? null : 100 - weekly} warn={weekly != null && weekly < 30} err={weekly != null && weekly < 10}
-      currentDay={budget?.day} timeMarker={budget?.elapsedPct}
-      expiryMarkers={budget ? expiryMarkers : []}
-      markerLabel={budget ? t('budget.marker', { pct: number(budget.elapsedPct) }) : undefined}
-      meta={[{ label: t('meta.reset'), value: resetLabel(snapshot?.weekly_reset_at), muted: true },
-        { label: budget ? t('budget.day', { day: budget.day }) : t('meta.left'), value: budget ? t('budget.target', { pct: number(budget.targetPct) }) : weekly == null ? '—' : `${number(weekly)} %` }]}>
-      {budget ? <div className={`budget-info${budget.over > 0 ? ' warn' : ''}`} title={t('budget.note')}>
-        <div>{t('budget.available', { when: absolute(budget.dayEnd, locale), n: number(budget.available) })}</div>
-        {budget.over > 0 && <div className="budget-over">{t('budget.over', { n: number(budget.over) })}</div>}
-        <div className="budget-legend"><span className="legend-tick" />{t('budget.marker', { pct: number(budget.elapsedPct) })}</div>
-        {!!expiryMarkers.length && <div className="budget-legend"><span className="legend-expiry" />{t('credits.expiryLegend')}</div>}
-      </div> : <div className="budget-unavailable">{t('budget.unavailable')}</div>}
-    </Section>
+    <ManualResetControl windows={windows} value={manualReset} onSave={onManualReset} disabled={saving} />
+    {windows.slice().reverse().map((quota) => <QuotaSection key={quota.id} quota={quota} manualReset={manualReset}
+      credits={quota.id === 'weekly' ? credits : []} showUnavailable={quota.id === 'weekly'} />)}
 
     <Section title={t('section.resetCredits')} hint={snapshot ? t('hint.available', { n: credits.length }) : '—'}
       meta={[{ label: t('meta.nextExpiry'), value: <span className={`expiry-${nextUrgency}`}>{nextExpiry == null ? (credits.length ? t('credits.unknownExpiry') : '—') : resetLabel(nextExpiry)}</span> },

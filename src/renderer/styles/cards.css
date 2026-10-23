@@ -460,3 +460,17 @@
 .provider-team-row label { align-self: stretch; }
 .modal { max-width: calc(100vw - 20px); }
 .modal-actions { position: sticky; bottom: -14px; background: var(--bg-secondary); padding: 10px 0; border-top: 1px solid var(--border); }
+
+/* Manual reset planning stays local to the module and quota. */
+.manual-reset-control { margin: 8px 0 4px; padding-top: 6px; border-top: 1px solid var(--border-soft); }
+.manual-reset-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 10px; color: var(--text-secondary); }
+.manual-reset-toolbar select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 3px; font: inherit; max-width: 100%; }
+.manual-reset-toolbar button { margin-left: auto; }
+.manual-reset-control button:disabled, .manual-reset-control select:disabled { opacity: .5; cursor: default; }
+.manual-reset-editor { margin-top: 6px; padding: 1px 8px 6px; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 5px; }
+.manual-reset-editor input { color-scheme: dark; }
+.manual-reset-once { font-size: 11px; color: var(--text-primary); margin: 8px 0; }
+.manual-reset-marker { position: absolute; top: -5px; bottom: -3px; width: 2px; border-left: 2px dashed #c4a5ff; transform: translateX(-1px); }
+.manual-reset-marker::before { content: ''; position: absolute; top: -2px; left: -4px; width: 6px; height: 6px; background: #c4a5ff; border-radius: 50%; box-shadow: 0 0 0 1px var(--bg-primary); }
+.manual-reset-marker:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 4px; }
+.legend-manual { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #c4a5ff; margin-right: 5px; }

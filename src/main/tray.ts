@@ -2,10 +2,10 @@
  * System tray icon with quick actions and a "latest snapshot" submenu.
  * Phase 3 wires this up; defined here so main/index.ts can import.
  */
-import { Menu, Tray, nativeImage, app, BrowserWindow } from 'electron';
-import * as path from 'node:path';
+import { Menu, Tray, nativeImage } from 'electron';
 import * as fs from 'node:fs';
 import { CachedSnapshot } from './refresh-service.js';
+import { iconPath } from './window-identity.js';
 
 let trayInstance: Tray | null = null;
 let cachedTrayIcon: Electron.NativeImage | null = null;
@@ -14,7 +14,7 @@ function trayIconImage(): Electron.NativeImage {
   if (cachedTrayIcon) return cachedTrayIcon;
   // Prefer the 32x32 ICO we ship in assets/. Fall back to a generated
   // inline PNG if the file is missing (e.g. before make-icon.mjs ran).
-  const icoPath = path.join(app.getAppPath(), 'assets', 'icon.ico');
+  const icoPath = iconPath('ico');
   try {
     if (fs.existsSync(icoPath)) {
       const img = nativeImage.createFromPath(icoPath);

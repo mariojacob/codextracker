@@ -38,6 +38,8 @@ interface Props {
   markerLabel?: string;
   progressLabel?: string;
   expiryMarkers?: ExpiryMarker[];
+  segmentEnds?: number[];
+  manualMarker?: { pct: number; label: string };
   /** Two-column meta line under the bar. */
   meta?: [MetaPair, MetaPair];
   /** Bottom area for arbitrary content (e.g. reset-credit sub-rows). */
@@ -57,6 +59,8 @@ export function Section({
   markerLabel,
   progressLabel,
   expiryMarkers = [],
+  segmentEnds,
+  manualMarker,
   meta,
   children,
   noDivider,
@@ -72,16 +76,18 @@ export function Section({
       </div>
 
       {fillPct != null && (
-        <div className={`bar${currentDay ? ' weekly-bar' : ''}`}>
+        <div className={`bar${currentDay || timeMarker != null || manualMarker ? ' weekly-bar' : ''}`}>
           <div className="bar-progress" role="progressbar" aria-label={title}
             aria-valuemin={0} aria-valuemax={100} aria-valuenow={fillPct} aria-valuetext={progressLabel}>
             <div className={`bar-fill ${stateClass}`} style={{ width: `${fillPct}%` }} />
-            {currentDay != null && <div className="bar-segments" aria-hidden="true">
-              {Array.from({ length: 7 }, (_, index) => <span key={index} className={index + 1 === currentDay ? 'current' : ''} />)}
+            {currentDay != null && <div className="bar-segments" aria-hidden="true" style={{ gridTemplateColumns: (segmentEnds ?? Array.from({ length: 7 }, (_, i) => (i + 1) * 100 / 7)).map((end, i, ends) => `${end - (ends[i - 1] ?? 0)}fr`).join(' ') }}>
+              {(segmentEnds ?? Array(7).fill(0)).map((_, index) => <span key={index} className={index + 1 === currentDay ? 'current' : ''} />)}
             </div>}
           </div>
           {timeMarker != null && <span className="time-marker" style={{ left: `${timeMarker}%` }}
             title={markerLabel} aria-label={markerLabel} tabIndex={0} />}
+          {manualMarker && <span className="manual-reset-marker" style={{ left: `${manualMarker.pct}%` }}
+            role="img" title={manualMarker.label} aria-label={manualMarker.label} tabIndex={0} />}
           {expiryMarkers.map((marker) => <span key={marker.id}
             className={`reset-expiry-marker expiry-${marker.urgency}`} style={{ left: `${marker.pct}%` }}
             role="img" title={marker.label} aria-label={marker.label} tabIndex={0} />)}

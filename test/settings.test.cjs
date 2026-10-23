@@ -36,6 +36,10 @@ test('loading legacy settings persists migration and preserves unrelated rules a
     const reordered = { ...loaded, module_order: moveModule(loaded.module_order, 'antigravity', 'codex') };
     await saveSettings(reordered);
     assert.deepEqual(await loadSettings(), reordered, 'module order survives a restart');
+    const planned = { ...reordered, manual_resets: { codex: { window_id: 'weekly', enabled: true,
+      reset_at: 1793000000000, start_at: 1792700000000, start_used_percent: 0 } } };
+    await saveSettings(planned);
+    assert.deepEqual(await loadSettings(), planned, 'manual deadline and selected display survive a restart');
   } finally {
     os.homedir = originalHome;
     await fs.unlink(file).catch(() => {});

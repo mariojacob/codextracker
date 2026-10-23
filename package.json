@@ -1,6 +1,6 @@
 {
   "name": "codex-tracker",
-  "version": "2.3.0",
+  "version": "2.4.3",
   "description": "CodexTracker — Electron app for tracking your ChatGPT/Codex usage",
   "author": "Mario Jacob",
   "license": "MIT",
@@ -34,12 +34,15 @@
     "react-dom": "^18.3.1"
   },
   "build": {
-    "appId": "com.codextracker.app",
+    "appId": "com.codextracker.desktop",
     "productName": "CodexTracker",
     "directories": {
       "output": "release"
     },
     "asar": true,
+    "extraResources": [
+      { "from": "assets", "to": "assets", "filter": ["icon.ico", "icon.png"] }
+    ],
     "asarUnpack": [
       "node_modules/@napi-rs/keyring/**/*",
       "node_modules/@napi-rs/keyring-win32-x64-msvc/**/*"

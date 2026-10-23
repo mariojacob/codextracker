@@ -9,7 +9,7 @@
  *  - Drive the auto-refresh loop via RefreshService
  *  - Save and restore the user's last selected plan/email from /wham/usage
  */
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import * as path from 'node:path';
 import { readCodexAuth } from './codex/auth-reader.js';
@@ -26,6 +26,7 @@ import { assertTrustedIpcSender, validateProviderId, validateResetCreditId, vali
 import { ProviderService } from './providers/service.js';
 import { ProviderFetchError } from './providers/errors.js';
 import { PROVIDERS, type ProviderId, type ProviderRegion } from '../shared/providers.js';
+import { APP_ID, prepareWindowIdentity, setWindowIdentity, windowIcon } from './window-identity.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -43,6 +44,7 @@ let refreshService: RefreshService;
 let providerService: ProviderService;
 
 app.enableSandbox();
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
 function hardenWebContents(contents: WebContents): void {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -52,8 +54,7 @@ function hardenWebContents(contents: WebContents): void {
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
-  const icoPath = path.join(app.getAppPath(), 'assets', 'icon.ico');
-  const windowIcon = nativeImage.createFromPath(icoPath);
+  const icon = windowIcon();
   const win = new BrowserWindow({
     width: 460,
     height: 680,
@@ -62,7 +63,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     title: 'CodexTracker',
     backgroundColor: '#0f0f10',
     autoHideMenuBar: true,
-    icon: windowIcon.isEmpty() ? undefined : icoPath,
+    icon: icon.isEmpty() ? undefined : icon,
     show: false, // Show after ready-to-show to avoid white flash
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -75,11 +76,8 @@ async function createMainWindow(): Promise<BrowserWindow> {
   });
   hardenWebContents(win.webContents);
 
-  // Taskbar/Alt-Tab should show our icon, not the Electron default.
-  if (!windowIcon.isEmpty()) {
-    win.setIcon(windowIcon);
-  }
-  app.setAppUserModelId('com.codextracker.app');
+  setWindowIdentity(win);
+  win.on('show', () => setWindowIdentity(win));
 
   win.once('ready-to-show', () => {
     win.show();
@@ -107,8 +105,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
 }
 
 async function createStatsWindow(): Promise<BrowserWindow> {
-  const icoPath = path.join(app.getAppPath(), 'assets', 'icon.ico');
-  const windowIcon = nativeImage.createFromPath(icoPath);
+  const icon = windowIcon();
   const win = new BrowserWindow({
     width: 760,
     height: 640,
@@ -117,7 +114,7 @@ async function createStatsWindow(): Promise<BrowserWindow> {
     title: 'CodexTracker — Statistics',
     backgroundColor: '#0f0f10',
     autoHideMenuBar: true,
-    icon: windowIcon.isEmpty() ? undefined : icoPath,
+    icon: icon.isEmpty() ? undefined : icon,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -129,9 +126,8 @@ async function createStatsWindow(): Promise<BrowserWindow> {
     },
   });
   hardenWebContents(win.webContents);
-  if (!windowIcon.isEmpty()) {
-    win.setIcon(windowIcon);
-  }
+  setWindowIdentity(win);
+  win.on('show', () => setWindowIdentity(win));
 
   win.once('ready-to-show', () => {
     win.show();
@@ -329,6 +325,7 @@ async function initTray(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  await prepareWindowIdentity();
   // Hide default menu bar on Windows/Linux
   Menu.setApplicationMenu(null);
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));

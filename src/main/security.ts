@@ -80,11 +80,29 @@ export function validateSettings(value: unknown): Settings {
     codex_enabled: codexEnabled,
     providers,
     module_order: moduleOrder(order as ModuleId[]),
+    ...(input.manual_resets === undefined ? {} : { manual_resets: validateManualResets(input.manual_resets) }),
     refresh_seconds: refresh,
     history_days: historyDays,
     language: input.language,
     notifications: { enabled: notificationInput.enabled, rules },
   };
+}
+
+function validateManualResets(value: unknown): NonNullable<Settings['manual_resets']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid manual resets.');
+  const result: NonNullable<Settings['manual_resets']> = {};
+  for (const [id, raw] of Object.entries(value)) {
+    if (!MODULE_IDS.includes(id as ModuleId) || !raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid manual reset module.');
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry.window_id !== 'string' || !entry.window_id.length || entry.window_id.length > 256 ||
+        typeof entry.enabled !== 'boolean') throw new Error('Invalid manual reset.');
+    const resetAt = boundedNumber(entry.reset_at, 0, 8.64e15, 'manual reset date');
+    const startAt = boundedNumber(entry.start_at, 0, 8.64e15, 'manual reset start');
+    if (resetAt <= startAt) throw new Error('Invalid manual reset interval.');
+    result[id as ModuleId] = { window_id: entry.window_id, reset_at: resetAt, enabled: entry.enabled,
+      start_at: startAt, start_used_percent: boundedNumber(entry.start_used_percent, 0, 100, 'manual reset usage') };
+  }
+  return result;
 }
 
 export function validateProviderId(value: unknown): ProviderId {

@@ -15,6 +15,7 @@ import { ProviderCards } from './components/ProviderCards.js';
 import { LocaleProvider, useLocale } from './i18n.js';
 import type { Settings } from '../shared/types.js';
 import { moveModule, type ModuleId } from '../shared/modules.js';
+import type { ManualReset } from '../shared/manual-reset.js';
 
 function statusClass(pct: number | null, snapshotError: string | null | undefined): 'ok' | 'warn' | 'err' {
   if (snapshotError) return 'err';
@@ -59,6 +60,24 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
       await Promise.allSettled([...(codexEnabled ? [signIn()] : []), providers.refresh()]);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleManualReset(id: ModuleId, value: ManualReset | undefined) {
+    if (orderSavePending.current || settingsOpen) throw new Error('Settings save in progress.');
+    orderSavePending.current = true;
+    setOrderSaving(true);
+    const resets = { ...currentSettings.manual_resets };
+    if (value) resets[id] = value;
+    else delete resets[id];
+    const next = { ...currentSettings, manual_resets: resets };
+    try {
+      const result = await window.codexAPI.setSettings(next);
+      if (!result.ok) throw new Error('Settings save failed.');
+      setCurrentSettings(next);
+    } finally {
+      orderSavePending.current = false;
+      setOrderSaving(false);
     }
   }
 
@@ -119,6 +138,7 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
       <main className="app-main">
         {orderError && <div className="error-banner" role="alert">{t('providers.error.settings')}</div>}
         <ProviderCards snapshots={providers.snapshots} error={providers.error}
+          manualResets={currentSettings.manual_resets} onManualReset={handleManualReset}
           order={currentSettings.module_order} onMove={handleMoveModule} saving={orderSaving || settingsOpen} codex={codexEnabled ? (controls) =>
           <section className="provider-card provider-codex">
             <div className="provider-card-head"><h3>ChatGPT / Codex</h3>
@@ -136,7 +156,8 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
                 : t('status.ok')}
             </span>
           )}
-          <Cards snapshot={snapshot} />
+          <Cards snapshot={snapshot} manualReset={currentSettings.manual_resets?.codex}
+            onManualReset={(value) => handleManualReset('codex', value)} saving={orderSaving || settingsOpen} />
             <div className="provider-card-footer"><span>{snapshot?.fetched_at ? `${t('app.footer.updated')} ${formatTime(snapshot.fetched_at)}` : ''}</span>
               <button className="btn-tiny" onClick={() => void handleOpenStats()}>{t('app.stats.tooltip')}</button></div>
             </> : <LoginPrompt onImported={() => void signIn()} />}
