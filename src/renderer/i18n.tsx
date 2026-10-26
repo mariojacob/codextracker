@@ -12,6 +12,10 @@ import type { Language } from '../shared/types.js';
 type Dict = Record<string, string>;
 
 const en: Dict = {
+  'banked.title': 'Next banked reset',
+  'banked.deadline': 'Banked reset expiry',
+  'banked.missing': 'No available banked reset with a known expiry · automatic budget',
+  'banked.budgetNote': 'Unused allowance carries over until the next available banked reset expires. The deadline follows available resets; no reset is triggered automatically.',
   'manual.day': 'Budget day {day}',
   'manual.display': 'Display',
   'manual.auto': 'Automatic',
@@ -113,7 +117,7 @@ const en: Dict = {
   'app.footer.updated': 'Updated',
   'app.footer.never': 'Not signed in',
   'app.footer.neverLowercase': 'never',
-  'app.version': 'v2.4.3',
+  'app.version': 'v2.4.4',
 
   // Account / status
   'account.notSignedIn': 'Not signed in',
@@ -190,6 +194,10 @@ const en: Dict = {
 
 const de: Dict = {
   'manual.day': 'Budgettag {day}',
+  'banked.title': 'Nächster Banked Reset',
+  'banked.deadline': 'Banked Reset läuft ab',
+  'banked.missing': 'Kein verfügbarer Banked Reset mit bekanntem Ablauf · automatisches Budget',
+  'banked.budgetNote': 'Ungenutztes Budget bleibt bis zum Ablauf des nächsten verfügbaren Banked Resets erhalten. Der Termin folgt den verfügbaren Resets; ein Reset wird nicht automatisch ausgelöst.',
   'manual.display': 'Anzeige',
   'manual.auto': 'Automatisch',
   'manual.title': 'Manueller Reset',
@@ -289,7 +297,7 @@ const de: Dict = {
   'app.footer.updated': 'Aktualisiert',
   'app.footer.never': 'Nicht angemeldet',
   'app.footer.neverLowercase': 'nie',
-  'app.version': 'v2.4.3',
+  'app.version': 'v2.4.4',
 
   'account.notSignedIn': 'Nicht angemeldet',
   'status.ok': 'OK',

@@ -5,17 +5,17 @@
 Monitor subscription quotas, plan your daily allowance, and follow API balances with a portable Windows app. Choose the modules you use: ChatGPT / Codex, Antigravity, Claude, Cursor, Grok, MiniMax, z.ai, Kimi and more.
 
 <p>
-  <img src="https://img.shields.io/badge/version-2.4.3-10a37f" alt="Version 2.4.3">
+  <img src="https://img.shields.io/badge/version-2.4.4-10a37f" alt="Version 2.4.4">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-64748b" alt="Windows x64">
   <img src="https://img.shields.io/badge/install-portable-64748b" alt="Portable application">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748b" alt="MIT license"></a>
 </p>
 
-[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.4.3](docs/releases/v2.4.3.md)
+[**Download for Windows**](https://github.com/mariojacob/codextracker/releases/latest) · [Provider setup](docs/providers.md) · [What's new in 2.4.4](docs/releases/v2.4.4.md)
 
-![CodexTracker 2.2.0: Codex daily budget, expiring banked resets, Antigravity quotas and separate API balances](docs/images/v2.2.0-dashboard.jpg)
+![CodexTracker 2.4.4: next banked reset budget, Antigravity quotas and a separate API balance](docs/images/v2.4.4-dashboard.png)
 
-*Screenshots show the actual 2.2.0 interface with simulated account and usage data. The two dashboard panels illustrate separate example configurations. Available data depends on the provider and account.*
+*CodexTracker 2.4.4 with dummy data. Dashboard panels show separate example configurations.*
 
 ## Features
 
@@ -47,7 +47,7 @@ Manual reset dates are planning aids and do not redeem a reset credit or change 
 
 Select a module and an individual quota to compare observed consumption. Weekly budget days follow the reset time; other quota windows and API trends use local calendar days. Missing measurements are shown as gaps rather than zero consumption. New modules start collecting their own history when enabled.
 
-![Per-module quota statistics with 7-day and 30-day views, separate model pools and visible missing coverage](docs/images/v2.2.0-statistics.jpg)
+![Per-module quota statistics with 7-day and 30-day views and visible missing coverage](docs/images/v2.4.4-statistics.png)
 
 <details>
 <summary><strong>More screenshots: API balances and module settings</strong></summary>
@@ -56,13 +56,13 @@ Select a module and an individual quota to compare observed consumption. Weekly 
 
 Balances, observed changes and reported costs remain separate. A balance decrease is not treated as a verified expense, and rolling cost reports are never added together.
 
-![DeepSeek API balance history, observed decreases and increases, and a daily balance chart](docs/images/v2.2.0-api-history.jpg)
+![DeepSeek API balance history, observed decreases and increases, and a daily balance chart](docs/images/v2.4.4-api-history.png)
 
 ### Enable only what you use
 
 Each provider has its own switch and setup instructions. Credentials stay in Windows Credential Manager; regional accounts use separate entries.
 
-![Provider settings with separate subscription and API groups and individual module switches](docs/images/v2.2.0-settings.jpg)
+![Module selection in Settings, cropped to the subscription and API provider switches](docs/images/v2.4.4-settings.png)
 
 </details>
 
@@ -111,6 +111,8 @@ Statistics sum observed decreases in remaining weekly quota within the same rese
 
 Available banked resets are sorted by expiry, highlighted yellow within 72 hours and red within 24 hours. Unknown expiry dates are labeled explicitly. Highlighting does not redeem a reset or create an extra notification.
 
+In the ChatGPT / Codex module, choose **Next banked reset** under **Display** to plan the weekly allowance until the earliest known expiry of an available reset. The deadline follows the next available reset when one expires or is redeemed. Without a known upcoming expiry, the automatic weekly budget is shown. This preference is saved across restarts, and no reset is redeemed automatically.
+
 Windows taskbar icons are retained under `.codex-tracker/shell` so their paths remain valid across portable app restarts and updates.
 
 Signing out removes the Credential Manager entry and non-secret authentication metadata. It intentionally keeps settings and history. To remove all local application data, close CodexTracker, delete `%USERPROFILE%\.codex-tracker`, and remove the `CodexTracker` / `codex-oauth-refresh-token` entry from Windows Credential Manager if it still exists.
@@ -138,7 +140,9 @@ The project supports only Windows x64 packaging. The native Windows Credential M
 
 ### Reproduce the README screenshots
 
-After `npm run build`, run `node scripts/screenshots/preview.cjs` and open `http://127.0.0.1:5181/showcase/dashboard`. Other scenes are `/showcase/statistics`, `/showcase/api` and `/showcase/settings`. For the settings scene, open the gear menu before capturing. The preview binds to loopback and supplies in-memory fake data to the compiled UI; it does not read real credentials and is excluded from the portable executable.
+After `npm run build`, run `npm run screenshots` to capture all four images into `docs/images/`. The dashboard includes the next-banked-reset display; the settings image focuses on module selection. Screenshots show the actual interface without promotional headings or explanatory panels.
+
+For an interactive preview, run `node scripts/screenshots/preview.cjs` and open `http://127.0.0.1:5181/showcase/dashboard`. Other scenes are `/showcase/statistics`, `/showcase/api` and `/showcase/settings`; open the gear menu in the settings scene. The preview binds to loopback, supplies only in-memory dummy data and never reads real credentials or settings. Screenshot scripts are excluded from the portable executable.
 
 ## Publishing releases
 

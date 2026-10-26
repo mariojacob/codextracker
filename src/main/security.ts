@@ -37,6 +37,9 @@ export function validateSettings(value: unknown): Settings {
   const input = value as Record<string, unknown>;
   const codexEnabled = input.codex_enabled === undefined ? true : input.codex_enabled;
   if (typeof codexEnabled !== 'boolean') throw new Error('Invalid Codex enabled flag.');
+  if (input.codex_banked_reset_budget !== undefined && typeof input.codex_banked_reset_budget !== 'boolean') {
+    throw new Error('Invalid banked reset budget flag.');
+  }
   const refresh = boundedInteger(input.refresh_seconds, 10, 3600, 'refresh_seconds');
   const historyDays = boundedInteger(input.history_days, 1, 365, 'history_days');
   if (input.language !== 'en' && input.language !== 'de') throw new Error('Unsupported language.');
@@ -81,6 +84,7 @@ export function validateSettings(value: unknown): Settings {
     providers,
     module_order: moduleOrder(order as ModuleId[]),
     ...(input.manual_resets === undefined ? {} : { manual_resets: validateManualResets(input.manual_resets) }),
+    ...(input.codex_banked_reset_budget === undefined ? {} : { codex_banked_reset_budget: input.codex_banked_reset_budget }),
     refresh_seconds: refresh,
     history_days: historyDays,
     language: input.language,

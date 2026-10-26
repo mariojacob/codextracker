@@ -40,6 +40,11 @@ test('loading legacy settings persists migration and preserves unrelated rules a
       reset_at: 1793000000000, start_at: 1792700000000, start_used_percent: 0 } } };
     await saveSettings(planned);
     assert.deepEqual(await loadSettings(), planned, 'manual deadline and selected display survive a restart');
+    const banked = { ...planned, codex_banked_reset_budget: true };
+    await saveSettings(banked);
+    assert.deepEqual(await loadSettings(), banked, 'banked display and saved manual deadline survive a restart');
+    await saveSettings({ ...banked, codex_banked_reset_budget: false });
+    assert.equal((await loadSettings()).codex_banked_reset_budget, false, 'switching back to the automatic or manual display persists');
   } finally {
     os.homedir = originalHome;
     await fs.unlink(file).catch(() => {});

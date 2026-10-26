@@ -1,6 +1,6 @@
 {
   "name": "codex-tracker",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "CodexTracker — Electron app for tracking your ChatGPT/Codex usage",
   "author": "Mario Jacob",
   "license": "MIT",
@@ -14,6 +14,7 @@
     "package": "npm run package:portable",
     "package:portable": "node scripts/clean.mjs release && npm run build && electron-builder --win portable && node scripts/verify-package.mjs && node scripts/finalize-release.mjs",
     "test": "npm run compile && node --test test/*.test.cjs",
+    "screenshots": "node scripts/screenshots/capture.cjs",
     "type-check": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "start": "npm run build && electron ."
   },
@@ -41,7 +42,14 @@
     },
     "asar": true,
     "extraResources": [
-      { "from": "assets", "to": "assets", "filter": ["icon.ico", "icon.png"] }
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "icon.ico",
+          "icon.png"
+        ]
+      }
     ],
     "asarUnpack": [
       "node_modules/@napi-rs/keyring/**/*",

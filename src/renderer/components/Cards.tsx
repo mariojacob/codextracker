@@ -4,7 +4,7 @@ import { useNow } from '../hooks/useNow.js';
 import { availableResetCredits, creditExpiry, expiryUrgency } from '../../shared/quota.js';
 import { ManualResetControl, type SaveManualReset } from './ManualResetControl.js';
 import { QuotaSection } from './QuotaSection.js';
-import type { ManualReset, ResetWindow } from '../../shared/manual-reset.js';
+import { bankedResetPlan, type ManualReset, type ResetWindow } from '../../shared/manual-reset.js';
 import type { CachedSnapshot, Language } from '../../shared/types.js';
 
 function absolute(timestamp: number | null | undefined, locale: Language): string {
@@ -14,7 +14,9 @@ function absolute(timestamp: number | null | undefined, locale: Language): strin
   });
 }
 
-export function Cards({ snapshot, manualReset, onManualReset, saving }: { snapshot: CachedSnapshot | null; manualReset?: ManualReset; onManualReset: SaveManualReset; saving: boolean }) {
+export function Cards({ snapshot, manualReset, bankedBudget = false, onManualReset, saving }: {
+  snapshot: CachedSnapshot | null; manualReset?: ManualReset; bankedBudget?: boolean; onManualReset: SaveManualReset; saving: boolean;
+}) {
   const { t, locale } = useLocale();
   const now = useNow();
   const number = (n: number) => n.toLocaleString(locale === 'de' ? 'de-AT' : 'en-GB', { maximumFractionDigits: 1 });
@@ -29,10 +31,13 @@ export function Cards({ snapshot, manualReset, onManualReset, saving }: { snapsh
   const credits = availableResetCredits(snapshot?.reset_credit_details ?? [], now);
   const nextExpiry = credits.map(creditExpiry).find((expiry) => expiry != null) ?? null;
   const nextUrgency = expiryUrgency(nextExpiry, now);
+  const bankedPlan = bankedBudget ? bankedResetPlan(windows[0], credits, now) : undefined;
   return <>
     {snapshot?.error && <div className="error-banner">{snapshot.error}</div>}
-    <ManualResetControl windows={windows} value={manualReset} onSave={onManualReset} disabled={saving} />
-    {windows.slice().reverse().map((quota) => <QuotaSection key={quota.id} quota={quota} manualReset={manualReset}
+    <ManualResetControl windows={windows} value={manualReset} onSave={onManualReset} disabled={saving}
+      bankedReset={{ selected: bankedBudget, resetAt: nextExpiry }} />
+    {windows.slice().reverse().map((quota) => <QuotaSection key={quota.id} quota={quota} manualReset={bankedBudget ? bankedPlan : manualReset}
+      planningLabel={bankedBudget ? t('banked.deadline') : undefined} budgetNote={bankedBudget ? t('banked.budgetNote') : undefined}
       credits={quota.id === 'weekly' ? credits : []} showUnavailable={quota.id === 'weekly'} />)}
 
     <Section title={t('section.resetCredits')} hint={snapshot ? t('hint.available', { n: credits.length }) : '—'}

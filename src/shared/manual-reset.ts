@@ -1,4 +1,5 @@
-import { DAY_MS, type WeeklyBudget } from './quota.js';
+import { availableResetCredits, creditExpiry, DAY_MS, WEEK_SECONDS, type WeeklyBudget } from './quota.js';
+import type { ResetCreditEntry } from './types.js';
 
 /** One saved planning deadline per module, scoped to a single quota pool. */
 export interface ManualReset {
@@ -37,6 +38,14 @@ export function createManualReset(window: ResetWindow, resetAt: number, previous
     start_at: keepStart ? previous.start_at : knownStart ? cycleStart : now,
     start_used_percent: keepStart ? previous.start_used_percent : knownStart ? 0 : window.used_percent ?? 0,
   };
+}
+
+/** Follow available banked resets while keeping the current weekly cycle as the budget origin. */
+export function bankedResetPlan(window: ResetWindow, credits: ResetCreditEntry[], now = Date.now()): ManualReset | undefined {
+  if (!Number.isFinite(now) || window.window_seconds !== WEEK_SECONDS || window.reset_at == null ||
+      !Number.isFinite(window.reset_at) || now >= window.reset_at || now < window.reset_at - WEEK_SECONDS * 1000) return undefined;
+  const expiresAt = availableResetCredits(credits, now).map(creditExpiry).find((at) => at != null);
+  return expiresAt == null ? undefined : { ...createManualReset(window, expiresAt, undefined, now), enabled: true };
 }
 
 export function activeManualReset(manual: ManualReset | undefined, windowId: string, now = Date.now()): manual is ManualReset {

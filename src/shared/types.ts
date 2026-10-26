@@ -22,6 +22,8 @@ export interface Settings {
   /** Dashboard positions, retained when a module is disabled. */
   module_order: ModuleId[];
   manual_resets?: Partial<Record<ModuleId, ManualReset>>;
+  /** Plan Codex usage until the earliest available banked reset expiry. */
+  codex_banked_reset_budget?: boolean;
   refresh_seconds: number;
   notifications: {
     enabled: boolean;

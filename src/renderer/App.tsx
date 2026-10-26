@@ -63,14 +63,15 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
     }
   }
 
-  async function handleManualReset(id: ModuleId, value: ManualReset | undefined) {
+  async function handleManualReset(id: ModuleId, value: ManualReset | undefined, bankedBudget = false) {
     if (orderSavePending.current || settingsOpen) throw new Error('Settings save in progress.');
     orderSavePending.current = true;
     setOrderSaving(true);
     const resets = { ...currentSettings.manual_resets };
     if (value) resets[id] = value;
     else delete resets[id];
-    const next = { ...currentSettings, manual_resets: resets };
+    const next = { ...currentSettings, manual_resets: resets,
+      ...(id === 'codex' ? { codex_banked_reset_budget: bankedBudget } : {}) };
     try {
       const result = await window.codexAPI.setSettings(next);
       if (!result.ok) throw new Error('Settings save failed.');
@@ -157,7 +158,8 @@ function Inner({ initialSettings }: { initialSettings: Settings }) {
             </span>
           )}
           <Cards snapshot={snapshot} manualReset={currentSettings.manual_resets?.codex}
-            onManualReset={(value) => handleManualReset('codex', value)} saving={orderSaving || settingsOpen} />
+            bankedBudget={currentSettings.codex_banked_reset_budget ?? false}
+            onManualReset={(value, bankedBudget) => handleManualReset('codex', value, bankedBudget)} saving={orderSaving || settingsOpen} />
             <div className="provider-card-footer"><span>{snapshot?.fetched_at ? `${t('app.footer.updated')} ${formatTime(snapshot.fetched_at)}` : ''}</span>
               <button className="btn-tiny" onClick={() => void handleOpenStats()}>{t('app.stats.tooltip')}</button></div>
             </> : <LoginPrompt onImported={() => void signIn()} />}
